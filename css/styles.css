@@ -559,11 +559,12 @@ body:-webkit-full-screen {
 }
 
 .boost-btn {
+  position: relative;
   width: 86px;
   height: 86px;
   margin-bottom: 18px;
   border-radius: 50%;
-  border: 1px solid rgba(232, 194, 122, 0.45);
+  border: 1px solid rgba(232, 194, 122, 0.35);
   background: radial-gradient(circle at 35% 30%, rgba(232, 194, 122, 0.28), rgba(8, 28, 34, 0.5));
   color: var(--text);
   font: inherit;
@@ -574,17 +575,56 @@ body:-webkit-full-screen {
   justify-content: center;
 }
 
+.boost-ring {
+  position: absolute;
+  inset: -5px;
+  width: calc(100% + 10px);
+  height: calc(100% + 10px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+  overflow: visible;
+}
+
+.boost-ring-track,
+.boost-ring-fill {
+  fill: none;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+
+.boost-ring-track {
+  stroke: rgba(232, 194, 122, 0.18);
+}
+
+.boost-ring-fill {
+  stroke: var(--accent-warm);
+  stroke-dasharray: 201.06;
+  stroke-dashoffset: 0;
+  transition: stroke 0.15s ease;
+  filter: drop-shadow(0 0 4px rgba(232, 194, 122, 0.35));
+}
+
 .boost-btn.active {
   transform: scale(0.94);
   border-color: rgba(232, 194, 122, 0.85);
   background: radial-gradient(circle at 35% 30%, rgba(232, 194, 122, 0.45), rgba(8, 28, 34, 0.55));
 }
 
+.boost-btn.active .boost-ring-fill {
+  stroke: #ffe2a0;
+}
+
 .boost-btn.cooling {
-  opacity: 0.55;
+  opacity: 0.72;
+}
+
+.boost-btn.cooling .boost-ring-fill {
+  stroke: rgba(232, 194, 122, 0.55);
 }
 
 .boost-chevron {
+  position: relative;
+  z-index: 1;
   width: 0;
   height: 0;
   border-style: solid;

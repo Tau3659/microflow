@@ -125,7 +125,9 @@ export const LAYERS = [
     dnaCount: 6,
     normalCount: 10,
     /** 被动 / 攻击 / 可激怒 权重 */
-    temperWeights: { passive: 0.4, hostile: 0.25, skittish: 0.35 },
+    /** 第一层普通生物全部被动，攻击性只留给 Boss */
+    temperWeights: { passive: 1, hostile: 0, skittish: 0 },
+    maxHostileNormals: 0,
     requiredEvolution: 0,
     morphPool: [MORPH.BACILLUS, MORPH.BACILLUS, MORPH.SPIRILLUM],
     boss: {
@@ -149,7 +151,8 @@ export const LAYERS = [
     proteinCount: 38,
     dnaCount: 7,
     normalCount: 12,
-    temperWeights: { passive: 0.35, hostile: 0.3, skittish: 0.35 },
+    temperWeights: { passive: 0.55, hostile: 0.1, skittish: 0.35 },
+    maxHostileNormals: 1,
     requiredEvolution: 1,
     morphPool: [MORPH.COCCUS, MORPH.SPIRILLUM, MORPH.COCCUS],
     boss: {
@@ -173,7 +176,8 @@ export const LAYERS = [
     proteinCount: 34,
     dnaCount: 8,
     normalCount: 14,
-    temperWeights: { passive: 0.3, hostile: 0.35, skittish: 0.35 },
+    temperWeights: { passive: 0.5, hostile: 0.14, skittish: 0.36 },
+    maxHostileNormals: 2,
     requiredEvolution: 2,
     morphPool: [MORPH.COLONY, MORPH.COCCUS, MORPH.COLONY],
     boss: {
@@ -197,7 +201,8 @@ export const LAYERS = [
     proteinCount: 30,
     dnaCount: 8,
     normalCount: 16,
-    temperWeights: { passive: 0.25, hostile: 0.4, skittish: 0.35 },
+    temperWeights: { passive: 0.48, hostile: 0.18, skittish: 0.34 },
+    maxHostileNormals: 3,
     requiredEvolution: 3,
     morphPool: [MORPH.VIRUS, MORPH.PHAGE, MORPH.VIRUS],
     boss: {
@@ -245,8 +250,11 @@ export const PARALLAX = {
 export const PLAYER = {
   baseSpeed: 105,
   boostSpeed: 195,
+  /** 基础加速时长；实际时长随进化等级提升 */
   boostDuration: 0.55,
-  boostCooldown: 1.35,
+  boostDurationPerEvo: 0.24,
+  /** 加速能量回复满所需秒数（圆环自动回满） */
+  boostRegenTime: 1.6,
   turnRate: 9,
   segmentSpacing: 11,
   /** 体型越大移动越慢：相对此参考半径缩放速度 */

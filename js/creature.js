@@ -337,7 +337,10 @@ export function createPlayer(x, y, evolutionId = 0) {
     nuclei: makeNuclei(evo.nuclei, evo.radius, evo.morph),
     pulse: 0,
     boostTimer: 0,
-    boostCooldown: 0,
+    boostDurationActive: 0,
+    /** 0..1 加速能量，按下扣除，随后自动回复 */
+    boostCharge: 1,
+    boostLatch: false,
     invuln: 0,
     recoverProgress: 0,
     storedProtein: 0,
@@ -793,14 +796,40 @@ export function mouthTouchesPoint(mouth, x, y, radius, world, bonus = 0) {
   return off.dist < mouth.r + radius + bonus;
 }
 
+/** 当前进化等级可用的加速时长 */
+export function boostDurationFor(evolutionId) {
+  return PLAYER.boostDuration + (evolutionId || 0) * (PLAYER.boostDurationPerEvo || 0.24);
+}
+
+/** 圆环显示：加速中看剩余加速时间，否则看能量回复 */
+export function boostRingRatio(player) {
+  if (player.boostTimer > 0 && player.boostDurationActive > 0) {
+    return clamp(player.boostTimer / player.boostDurationActive, 0, 1);
+  }
+  return clamp(player.boostCharge ?? 1, 0, 1);
+}
+
 export function updatePlayer(player, input, dt) {
-  if (player.boostCooldown > 0) player.boostCooldown -= dt;
   if (player.boostTimer > 0) player.boostTimer -= dt;
   if (player.invuln > 0) player.invuln -= dt;
 
-  if (input.boostPressed && player.boostTimer <= 0 && player.boostCooldown <= 0) {
-    player.boostTimer = PLAYER.boostDuration;
-    player.boostCooldown = PLAYER.boostCooldown;
+  const pressed = !!input.boostPressed;
+  if (!pressed) player.boostLatch = false;
+  if (pressed && !player.boostLatch) {
+    player.boostLatch = true;
+    // 能量回满后才能再次加速；按下一次扣光能量并进入加速
+    if (player.boostTimer <= 0 && (player.boostCharge ?? 0) >= 0.98) {
+      const dur = boostDurationFor(player.evolutionId);
+      player.boostDurationActive = dur;
+      player.boostTimer = dur;
+      player.boostCharge = 0;
+    }
+  }
+
+  // 非加速时自动回复能量
+  if (player.boostTimer <= 0) {
+    const regen = 1 / Math.max(0.2, PLAYER.boostRegenTime || 1.6);
+    player.boostCharge = clamp((player.boostCharge || 0) + regen * dt, 0, 1);
   }
 
   const boosting = player.boostTimer > 0;

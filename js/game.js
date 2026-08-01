@@ -12,6 +12,7 @@ import {
   nucleusWorldPos,
   anyMouthTouchesNucleus,
   anyMouthTouchesPoint,
+  boostRingRatio,
   wrapEntity,
   wrappedOffset,
 } from "./creature.js";
@@ -129,8 +130,9 @@ export class Game {
       recovering: missing > 0,
       exhausted: this.level.proteinsExhausted,
       canEvolve: this._canEvolve(),
-      boostReady: player.boostCooldown <= 0 && player.boostTimer <= 0,
+      boostReady: (player.boostCharge ?? 0) >= 0.98 && player.boostTimer <= 0,
       boosting: player.boostTimer > 0,
+      boostRatio: boostRingRatio(player),
     });
   }
 

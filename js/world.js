@@ -1,5 +1,34 @@
-import { LAYERS, WORLD } from "./config.js";
+import { LAYERS, TEMPER, WORLD } from "./config.js";
 import { createPlayer, createNormal, createBoss, createGhost } from "./creature.js";
+
+/** 将超额的固有攻击普通怪降为被动/警惕，保证 Boss 才是主要威胁 */
+function enforceHostileCap(creatures, layer) {
+  const maxH = layer.maxHostileNormals ?? 0;
+  const hostiles = creatures.filter((c) => c.kind === "normal" && c.temper === TEMPER.HOSTILE);
+  if (hostiles.length <= maxH) return;
+  // 打乱后保留前 maxH 个
+  for (let i = hostiles.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = hostiles[i];
+    hostiles[i] = hostiles[j];
+    hostiles[j] = t;
+  }
+  for (let i = maxH; i < hostiles.length; i += 1) {
+    const c = hostiles[i];
+    c.temper = Math.random() < 0.55 ? TEMPER.PASSIVE : TEMPER.SKITTISH;
+    c.aggressive = false;
+    c.warning = false;
+    if (c.calmColor) {
+      c.color = c.calmColor;
+      c.membrane = c.calmMembrane;
+      c.coreColor = c.calmCore;
+    } else {
+      c.color = layer.accent;
+      c.membrane = layer.bgTop;
+      c.coreColor = layer.protein;
+    }
+  }
+}
 
 function rand(min, max) {
   return min + Math.random() * (max - min);
@@ -109,6 +138,8 @@ export function createLevel(layerIndex, playerState) {
     const p = awayFrom(spawn.x, spawn.y, 220);
     creatures.push(createNormal(p.x, p.y, layer, layer.requiredEvolution));
   }
+  // 限制普通攻击性生物数量，随层级缓增，突出 Boss
+  enforceHostileCap(creatures, layer);
 
   const bossPos = awayFrom(spawn.x, spawn.y, 480);
   const boss = createBoss(bossPos.x, bossPos.y, layer);

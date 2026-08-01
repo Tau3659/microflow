@@ -21,6 +21,8 @@ const hudProgressIcon = document.getElementById("hud-progress-icon");
 const hudStatus = document.getElementById("hud-status");
 const proteinMeter = document.querySelector(".protein-meter");
 const boostBtn = document.getElementById("btn-boost");
+const boostRingFill = document.getElementById("boost-ring-fill");
+const BOOST_RING_LEN = 2 * Math.PI * 32;
 
 function renderPips(container, total, active) {
   container.innerHTML = "";
@@ -63,6 +65,7 @@ const hud = {
     canEvolve,
     boostReady,
     boosting,
+    boostRatio = 1,
   }) {
     renderPips(hudDepth, LYRS.length, layerIndex);
     renderPips(hudFormPips, EVOS.length, evolutionId);
@@ -95,6 +98,12 @@ const hud = {
     else if (canEvolve || exhausted) hudStatus.classList.add("ready");
 
     boostBtn.classList.toggle("cooling", !boostReady && !boosting);
+    boostBtn.classList.toggle("boosting", !!boosting);
+    if (boostRingFill) {
+      const ratio = Math.max(0, Math.min(1, boostRatio));
+      boostRingFill.style.strokeDasharray = `${BOOST_RING_LEN}`;
+      boostRingFill.style.strokeDashoffset = `${BOOST_RING_LEN * (1 - ratio)}`;
+    }
   },
 };
 
