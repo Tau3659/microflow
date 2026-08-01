@@ -97,6 +97,8 @@ export const LAYERS = [
     proteinCount: 42,
     dnaCount: 6,
     normalCount: 10,
+    /** 被动 / 攻击 / 可激怒 权重 */
+    temperWeights: { passive: 0.4, hostile: 0.25, skittish: 0.35 },
     requiredEvolution: 0,
     morphPool: [MORPH.BACILLUS, MORPH.BACILLUS, MORPH.SPIRILLUM],
     boss: {
@@ -120,6 +122,7 @@ export const LAYERS = [
     proteinCount: 38,
     dnaCount: 7,
     normalCount: 12,
+    temperWeights: { passive: 0.35, hostile: 0.3, skittish: 0.35 },
     requiredEvolution: 1,
     morphPool: [MORPH.COCCUS, MORPH.SPIRILLUM, MORPH.COCCUS],
     boss: {
@@ -143,6 +146,7 @@ export const LAYERS = [
     proteinCount: 34,
     dnaCount: 8,
     normalCount: 14,
+    temperWeights: { passive: 0.3, hostile: 0.35, skittish: 0.35 },
     requiredEvolution: 2,
     morphPool: [MORPH.COLONY, MORPH.COCCUS, MORPH.COLONY],
     boss: {
@@ -166,6 +170,7 @@ export const LAYERS = [
     proteinCount: 30,
     dnaCount: 8,
     normalCount: 16,
+    temperWeights: { passive: 0.25, hostile: 0.4, skittish: 0.35 },
     requiredEvolution: 3,
     morphPool: [MORPH.VIRUS, MORPH.PHAGE, MORPH.VIRUS],
     boss: {
@@ -183,6 +188,23 @@ export const LAYERS = [
 export const WORLD = {
   width: 2600,
   height: 2600,
+};
+
+/** 性情：被动 / 固有攻击 / 被激怒后攻击 */
+export const TEMPER = {
+  PASSIVE: "passive",
+  HOSTILE: "hostile",
+  SKITTISH: "skittish",
+};
+
+/** 攻击性警告色（高对比警示） */
+export const WARNING = {
+  color: "#ff5a3c",
+  membrane: "#8a2418",
+  core: "#ffd2a8",
+  stripe: "#ffc14a",
+  calmPassive: "#7dceb8",
+  calmSkittish: "#c9b86a",
 };
 
 /** 视差：下一层更慢，相对位移体现速度感 */

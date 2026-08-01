@@ -1,4 +1,4 @@
-import { BOSS_AI, EVOLUTIONS, MORPH, PLAYER } from "./config.js";
+import { BOSS_AI, EVOLUTIONS, MORPH, PLAYER, TEMPER, WARNING } from "./config.js";
 
 let nextId = 1;
 
@@ -229,11 +229,76 @@ export function restoreOneNucleus(player) {
   return true;
 }
 
+function rollTemper(weights = {}) {
+  const passive = weights.passive ?? 0.4;
+  const hostile = weights.hostile ?? 0.25;
+  const r = Math.random();
+  if (r < passive) return TEMPER.PASSIVE;
+  if (r < passive + hostile) return TEMPER.HOSTILE;
+  return TEMPER.SKITTISH;
+}
+
+function paletteForTemper(temper, layer) {
+  if (temper === TEMPER.HOSTILE) {
+    return {
+      color: WARNING.color,
+      membrane: WARNING.membrane,
+      coreColor: WARNING.core,
+      aggressive: true,
+      warning: true,
+    };
+  }
+  if (temper === TEMPER.PASSIVE) {
+    return {
+      color: WARNING.calmPassive,
+      membrane: layer.bgTop,
+      coreColor: "#d8fff2",
+      aggressive: false,
+      warning: false,
+    };
+  }
+  return {
+    color: WARNING.calmSkittish,
+    membrane: layer.bgMid || layer.bgTop,
+    coreColor: "#fff3c8",
+    aggressive: false,
+    warning: false,
+  };
+}
+
+export function isAggressive(creature) {
+  if (!creature || !creature.alive) return false;
+  if (creature.kind === "boss") return true;
+  return !!creature.aggressive;
+}
+
+/** 被玩家攻击后，可激怒型转为攻击性并切换警告色 */
+export function provokeCreature(creature) {
+  if (!creature || creature.kind === "boss") return false;
+  if (creature.temper === TEMPER.PASSIVE) return false;
+  if (creature.aggressive) return false;
+  if (creature.temper !== TEMPER.SKITTISH && creature.temper !== TEMPER.HOSTILE) {
+    return false;
+  }
+  creature.aggressive = true;
+  creature.warning = true;
+  creature.calmColor = creature.color;
+  creature.calmMembrane = creature.membrane;
+  creature.calmCore = creature.coreColor;
+  creature.color = WARNING.color;
+  creature.membrane = WARNING.membrane;
+  creature.coreColor = WARNING.core;
+  creature.provokeFlash = 0.8;
+  return true;
+}
+
 export function createNormal(x, y, layer, evolutionFloor = 0) {
   const tier = clamp(evolutionFloor + Math.floor(Math.random() * 2), 0, EVOLUTIONS.length - 1);
   const evo = EVOLUTIONS[tier];
   const morph = pick(layer.morphPool || [evo.morph]);
   const radius = evo.radius * (0.75 + Math.random() * 0.45);
+  const temper = rollTemper(layer.temperWeights);
+  const look = paletteForTemper(temper, layer);
   const segments = [];
   const count = Math.max(3, evo.segmentCount - 1);
   for (let i = 0; i < count; i += 1) {
@@ -242,6 +307,7 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
   return {
     id: nextId++,
     kind: "normal",
+    temper,
     x,
     y,
     vx: 0,
@@ -249,9 +315,11 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     angle: Math.random() * Math.PI * 2,
     radius,
     morph,
-    color: layer.accent,
-    coreColor: "#e8f4f2",
-    membrane: layer.bgTop,
+    color: look.color,
+    coreColor: look.coreColor,
+    membrane: look.membrane,
+    aggressive: look.aggressive,
+    warning: look.warning,
     flagella: morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM ? 1 + Math.floor(Math.random() * 2) : 0,
     spikes: morph === MORPH.VIRUS ? 8 + Math.floor(Math.random() * 4) : 0,
     colonyCells: morph === MORPH.COLONY ? 4 + Math.floor(Math.random() * 4) : 0,
@@ -262,7 +330,8 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     pulse: Math.random() * 10,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
-    aggro: 0.35 + Math.random() * 0.35,
+    aggro: temper === TEMPER.HOSTILE ? 0.85 + Math.random() * 0.25 : 0.4 + Math.random() * 0.3,
+    provokeFlash: 0,
     alive: true,
     storedProtein: 0,
     dropDna: Math.random() < 0.45 ? 1 : 0,
@@ -304,7 +373,11 @@ export function createBoss(x, y, layer) {
     pulse: 0,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
+    temper: TEMPER.HOSTILE,
+    aggressive: true,
+    warning: true,
     aggro: 1,
+    provokeFlash: 0,
     alive: true,
     storedProtein: 0,
     dropDna: 2 + Math.floor(b.nuclei / 2),
@@ -522,11 +595,26 @@ function updateBoss(creature, player, dt, world, proteins = []) {
   wrapEntity(creature, world);
 }
 
+function seekProtein(creature, proteins, world, maxDist = 260) {
+  let nearest = null;
+  let nearestDist = maxDist;
+  for (const p of proteins) {
+    const off = wrappedOffset(creature.x, creature.y, p.x, p.y, world);
+    if (off.dist < nearestDist) {
+      nearestDist = off.dist;
+      nearest = off;
+    }
+  }
+  return nearest;
+}
+
 export function updateEnemy(creature, player, dt, world, proteins = []) {
   if (creature.kind === "boss") {
     updateBoss(creature, player, dt, world, proteins);
     return;
   }
+
+  if (creature.provokeFlash > 0) creature.provokeFlash -= dt;
 
   creature.wanderTimer -= dt;
   if (creature.wanderTimer <= 0) {
@@ -536,37 +624,43 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
 
   let tx = Math.cos(creature.wanderAngle);
   let ty = Math.sin(creature.wanderAngle);
+  let speedMul = 1;
 
   const toPlayer = wrappedOffset(creature.x, creature.y, player.x, player.y, world);
-  const chaseRange = 280;
+  const aggressive = isAggressive(creature);
 
-  if (toPlayer.dist < chaseRange) {
-    const n = normalize(toPlayer.dx, toPlayer.dy);
-    if (player.radius > creature.radius * 1.25) {
-      tx = -n.x * 1.2 + tx * 0.3;
-      ty = -n.y * 1.2 + ty * 0.3;
+  if (aggressive) {
+    const chaseRange = 320;
+    if (toPlayer.dist < chaseRange) {
+      const n = normalize(toPlayer.dx, toPlayer.dy);
+      tx = n.x * creature.aggro + tx * 0.2;
+      ty = n.y * creature.aggro + ty * 0.2;
+      speedMul = 1.08;
     } else {
-      tx = n.x * creature.aggro + tx * 0.25;
-      ty = n.y * creature.aggro + ty * 0.25;
-    }
-  } else {
-    // 空闲时觅食附近蛋白质
-    let nearest = null;
-    let nearestDist = 260;
-    for (const p of proteins) {
-      const off = wrappedOffset(creature.x, creature.y, p.x, p.y, world);
-      if (off.dist < nearestDist) {
-        nearestDist = off.dist;
-        nearest = off;
+      const food = seekProtein(creature, proteins, world);
+      if (food) {
+        tx = food.dx * 1.1 + tx * 0.25;
+        ty = food.dy * 1.1 + ty * 0.25;
       }
     }
-    if (nearest) {
-      tx = nearest.dx * 1.1 + tx * 0.25;
-      ty = nearest.dy * 1.1 + ty * 0.25;
+  } else {
+    // 被动 / 未激怒：躲避玩家，专心觅食
+    const fleeRange = creature.temper === TEMPER.PASSIVE ? 240 : 200;
+    if (toPlayer.dist < fleeRange) {
+      const n = normalize(toPlayer.dx, toPlayer.dy);
+      tx = -n.x * 1.35 + tx * 0.15;
+      ty = -n.y * 1.35 + ty * 0.15;
+      speedMul = 1.05;
+    } else {
+      const food = seekProtein(creature, proteins, world, 300);
+      if (food) {
+        tx = food.dx * 1.15 + tx * 0.2;
+        ty = food.dy * 1.15 + ty * 0.2;
+      }
     }
   }
 
-  steerCreature(creature, tx, ty, dt, 1);
+  steerCreature(creature, tx, ty, dt, speedMul);
   wrapEntity(creature, world);
 }
 

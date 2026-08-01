@@ -1,5 +1,5 @@
-import { EVOLUTIONS, MORPH, PARALLAX } from "./config.js";
-import { aliveNuclei, mouthWorldPos, nucleusWorldPos } from "./creature.js";
+import { EVOLUTIONS, MORPH, PARALLAX, WARNING } from "./config.js";
+import { aliveNuclei, isAggressive, mouthWorldPos, nucleusWorldPos } from "./creature.js";
 
 function hexToRgba(hex, alpha) {
   const h = hex.replace("#", "");
@@ -550,8 +550,35 @@ export class Renderer {
           ctx.fill();
         }
 
+        // 攻击性：明显警告色环 + 斜纹警示
+        if (isAggressive(creature) || creature.warning) {
+          const flash = creature.provokeFlash > 0 ? 0.25 : 0;
+          const ringR = creature.radius * (1.28 + Math.sin(this.time * 6) * 0.04);
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba(WARNING.color, 0.55 + flash);
+          ctx.lineWidth = 2.4;
+          ctx.arc(headX, headY, ringR, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba(WARNING.stripe, 0.7 + flash);
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.lineDashOffset = -this.time * 28;
+          ctx.arc(headX, headY, ringR + 5, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // 警示三角小标记
+          ctx.fillStyle = hexToRgba(WARNING.stripe, 0.85);
+          ctx.beginPath();
+          const ty = headY - creature.radius - 10;
+          ctx.moveTo(headX, ty - 7);
+          ctx.lineTo(headX - 6, ty + 4);
+          ctx.lineTo(headX + 6, ty + 4);
+          ctx.closePath();
+          ctx.fill();
+        }
+
         if (creature.kind === "boss") {
-          // 淡淡领地圈，提示不会无限追杀
           if (creature.homeX != null) {
             const hx = creature.homeX + ox - camera.x;
             const hy = creature.homeY + oy - camera.y;
@@ -563,15 +590,10 @@ export class Renderer {
             ctx.stroke();
             ctx.setLineDash([]);
           }
-          ctx.beginPath();
-          ctx.strokeStyle = hexToRgba(creature.color, 0.45);
-          ctx.lineWidth = 1.5;
-          ctx.arc(headX, headY, creature.radius * 1.35, 0, Math.PI * 2);
-          ctx.stroke();
           ctx.fillStyle = hexToRgba("#e8f4f2", 0.7);
           ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
           ctx.textAlign = "center";
-          ctx.fillText(creature.name, headX, headY - creature.radius - 16);
+          ctx.fillText(creature.name, headX, headY - creature.radius - 22);
           const state =
             creature.aiState === "chase"
               ? "警戒"
@@ -581,7 +603,7 @@ export class Renderer {
           ctx.fillText(
             `核 ${aliveNuclei(creature).length} · ${state}`,
             headX,
-            headY - creature.radius - 3
+            headY - creature.radius - 9
           );
         }
 

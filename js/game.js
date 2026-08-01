@@ -5,6 +5,8 @@ import {
   updateGhost,
   applyEvolution,
   restoreOneNucleus,
+  provokeCreature,
+  isAggressive,
   aliveNuclei,
   nucleusWorldPos,
   mouthWorldPos,
@@ -312,6 +314,11 @@ export class Game {
           n.alive = false;
           spawnBurst(level, eN.x, eN.y, enemy.coreColor, 8);
           spawnFloatText(level, eN.x, eN.y, "吞核", enemy.coreColor);
+          // 可激怒生物被攻击后转为攻击性（警告色）
+          if (provokeCreature(enemy)) {
+            spawnFloatText(level, enemy.x, enemy.y - 26, "激怒！", "#ff5a3c");
+            spawnBurst(level, enemy.x, enemy.y, "#ff5a3c", 10);
+          }
         }
       }
 
@@ -329,8 +336,8 @@ export class Game {
         continue;
       }
 
-      // 只有敌方的嘴碰到玩家细胞核，才算吃掉
-      if (player.invuln > 0) continue;
+      // 仅攻击性生物会用嘴吞噬玩家细胞核
+      if (player.invuln > 0 || !isAggressive(enemy)) continue;
       const enemyMouth = mouthWorldPos(enemy);
       let hit = false;
       for (const pn of aliveNuclei(player)) {
@@ -351,7 +358,7 @@ export class Game {
           "细胞核被吃光",
           enemy.kind === "boss"
             ? `${enemy.name} 用嘴吃光了你的细胞核。`
-            : "敌方生物用嘴吃光了你的细胞核。"
+            : "攻击性生物用嘴吃光了你的细胞核。"
         );
         return;
       }
