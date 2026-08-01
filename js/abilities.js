@@ -16,7 +16,7 @@ export function isAbilityMaxed(player, id) {
   return abilityCount(player, id) >= def.maxStacks;
 }
 
-/** 根据层与玩家已拥有数量，决定是否掉落及掉落哪种能力 */
+/** 根据层与玩家已拥有数量，决定是否掉落及掉落哪种能力；Boss 必掉 */
 export function rollAbilityDrop(layerIndex, player, isBoss = false) {
   const owned = player?.abilities || {};
   const candidates = Object.values(ABILITIES).filter((a) => {
@@ -26,15 +26,15 @@ export function rollAbilityDrop(layerIndex, player, isBoss = false) {
   });
   if (!candidates.length) return null;
 
-  const boost = isBoss ? 2.2 : 1;
-  // 先掷一次“是否掉落稀有能力”
-  const anyRate = 0.055 * boost;
-  if (Math.random() > anyRate) return null;
+  // 普通怪：提高掉落率；Boss：跳过掷骰，必掉一件
+  if (!isBoss) {
+    const anyRate = 0.16;
+    if (Math.random() > anyRate) return null;
+  }
 
-  // 加权挑选
   let total = 0;
   const weights = candidates.map((a) => {
-    const w = a.dropRate * boost;
+    const w = a.dropRate * (isBoss ? 1.4 : 1);
     total += w;
     return w;
   });

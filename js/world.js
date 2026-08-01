@@ -62,18 +62,25 @@ export function createDna(layer, x, y) {
     x: x ?? rand(40, WORLD.width - 40),
     y: y ?? rand(40, WORLD.height - 40),
     r: rand(8, 11),
+    /** 吃到也算蛋白质 */
+    value: 2,
     phase: rand(0, Math.PI * 2),
     color: layer.dna,
   };
 }
 
-export function createPortal() {
+/** dir: "down" 下一层入口 / "up" 上一层出口 */
+export function createPortal(dir = "down") {
+  const down = dir === "down";
   return {
     x: WORLD.width * 0.5,
-    y: WORLD.height * 0.18,
+    y: down ? WORLD.height * 0.18 : WORLD.height * 0.82,
     r: 42,
     open: false,
     pulse: 0,
+    dir: down ? "down" : "up",
+    // 下一层青绿 / 上一层暖琥珀，颜色区分
+    color: down ? "#3ecfb0" : "#e8a85c",
   };
 }
 
@@ -165,7 +172,9 @@ export function createLevel(layerIndex, playerState) {
     deepField,
     particles: [],
     abilities: [],
-    portal: createPortal(),
+    portal: createPortal("down"),
+    /** 上一层出口：仅深层存在，始终可用；进入后整层 NPC/蛋白重置 */
+    exitPortal: layerIndex > 0 ? createPortal("up") : null,
     world: { ...WORLD },
     points: playerState.points,
     evolvedThisLayer: playerState.evolvedThisLayer ?? false,

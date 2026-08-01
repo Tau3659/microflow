@@ -822,16 +822,17 @@ export class Renderer {
   drawPortal(portal, camera, open, world) {
     if (!portal) return;
     const ctx = this.ctx;
+    const color = portal.color || "#3ecfb0";
     forEachWrapDraw(portal.x, portal.y, camera, world, this.w, this.h, 120, (x, y) => {
       const pulse = 1 + Math.sin(portal.pulse * 2.8) * 0.08;
       const r = portal.r * pulse;
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(portal.pulse * 0.5);
+      ctx.rotate(portal.pulse * (portal.dir === "up" ? -0.45 : 0.5));
       for (let i = 0; i < 3; i += 1) {
         ctx.beginPath();
         ctx.strokeStyle = open
-          ? hexToRgba("#3ecfb0", 0.55 - i * 0.14)
+          ? hexToRgba(color, 0.55 - i * 0.14)
           : "rgba(232,244,242,0.14)";
         ctx.lineWidth = 2;
         ctx.ellipse(0, 0, r * (1 + i * 0.2), r * (0.55 + i * 0.08), 0, 0, Math.PI * 2);
@@ -839,8 +840,8 @@ export class Renderer {
       }
       if (open) {
         const g = ctx.createRadialGradient(0, 0, 2, 0, 0, r);
-        g.addColorStop(0, "rgba(62,207,176,0.28)");
-        g.addColorStop(1, "rgba(62,207,176,0)");
+        g.addColorStop(0, hexToRgba(color, 0.28));
+        g.addColorStop(1, hexToRgba(color, 0));
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(0, 0, r, 0, Math.PI * 2);
@@ -850,7 +851,7 @@ export class Renderer {
     });
   }
 
-  /** 屏幕边缘弱提示：下一层入口方向（传送门开启时） */
+  /** 屏幕边缘弱提示：传送门方向（颜色随入口/出口） */
   drawPortalEdgeHint(portal, camera, open) {
     if (!portal || !open) return;
     const sx = portal.x - camera.x;
@@ -860,13 +861,13 @@ export class Renderer {
       sx > margin && sy > margin && sx < this.w - margin && sy < this.h - margin;
     if (onScreen) return;
 
+    const color = portal.color || "#3ecfb0";
     const cx = this.w * 0.5;
     const cy = this.h * 0.5;
     const dx = sx - cx;
     const dy = sy - cy;
     const ang = Math.atan2(dy, dx);
     const edgePad = 18;
-    // 射线与屏幕矩形边界交点
     const cos = Math.cos(ang);
     const sin = Math.sin(ang);
     const tx = cos > 0 ? (this.w - edgePad - cx) / cos : cos < 0 ? (edgePad - cx) / cos : Infinity;
@@ -880,7 +881,7 @@ export class Renderer {
     ctx.translate(ex, ey);
     ctx.rotate(ang);
     ctx.globalAlpha = pulse;
-    ctx.fillStyle = hexToRgba("#3ecfb0", 0.55);
+    ctx.fillStyle = hexToRgba(color, 0.55);
     ctx.beginPath();
     ctx.moveTo(10, 0);
     ctx.lineTo(-6, -8);
@@ -888,7 +889,7 @@ export class Renderer {
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
-    ctx.strokeStyle = hexToRgba("#3ecfb0", 0.35);
+    ctx.strokeStyle = hexToRgba(color, 0.35);
     ctx.lineWidth = 1.5;
     ctx.arc(-2, 0, 14, -0.9, 0.9);
     ctx.stroke();
@@ -940,7 +941,7 @@ export class Renderer {
     }
   }
 
-  render(level, camera, canEvolve, portalOpen, transitionAlpha = 0) {
+  render(level, camera, canEvolve, portalOpen, transitionAlpha = 0, transitionAccent = null) {
     this.time += 0.016;
     const p = level.player;
     const world = level.world;
@@ -966,6 +967,9 @@ export class Renderer {
     this.drawLayeredBackground(level, deepCam, flow);
     this.drawGhosts(level.ghosts, camera, world, flow);
     this.drawPortal(level.portal, camera, portalOpen, world);
+    if (level.exitPortal) {
+      this.drawPortal(level.exitPortal, camera, true, world);
+    }
     this.drawProteins(level.proteins, camera, world);
     this.drawAbilities(level.abilities, camera, world);
     this.drawDnas(level.dnas, camera, canEvolve, world);
@@ -973,8 +977,14 @@ export class Renderer {
     this.drawCreature(level.player, camera, world);
     this.drawParticles(level.particles, camera, world);
     this.drawPortalEdgeHint(level.portal, camera, portalOpen);
+    if (level.exitPortal) {
+      this.drawPortalEdgeHint(level.exitPortal, camera, true);
+    }
     if (transitionAlpha > 0) {
-      this.drawTransition(transitionAlpha, level.layer?.accent || "#3ecfb0");
+      this.drawTransition(
+        transitionAlpha,
+        transitionAccent || level.layer?.accent || "#3ecfb0"
+      );
     }
   }
 }

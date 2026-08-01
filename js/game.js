@@ -145,7 +145,8 @@ export class Game {
       this.camera,
       this._canEvolve(),
       this._portalOpen(),
-      trAlpha
+      trAlpha,
+      tr?.accent || null
     );
     this.raf = requestAnimationFrame((t) => this._loop(t));
   }
@@ -188,13 +189,33 @@ export class Game {
     this._updateHud();
   }
 
+  /** 蛋白质增益：修核优先，否则计入进化点数 */
+  _applyProteinGain(rawValue, burstX, burstY, burstColor) {
+    const level = this.level;
+    const player = level.player;
+    const proteinValue = player.mods?.proteinValue || 1;
+    const recoverNeed = player.mods?.recoverNeed || PLAYER.proteinPerNucleus;
+    const missing = player.nuclei.length - aliveNuclei(player).length;
+    const gained = rawValue * proteinValue;
+    level.proteinConsumed += rawValue;
+    spawnBurst(level, burstX, burstY, burstColor, 4);
+    if (missing > 0) {
+      player.recoverProgress = (player.recoverProgress || 0) + gained;
+      if (player.recoverProgress >= recoverNeed) {
+        player.recoverProgress -= recoverNeed;
+        if (restoreOneNucleus(player)) {
+          spawnBurst(level, player.x, player.y, player.coreColor, 14);
+        }
+      }
+    } else {
+      level.points += gained;
+    }
+  }
+
   _collectPickups(dt = 0.016) {
     const level = this.level;
     const player = level.player;
     const world = level.world;
-    const missing = player.nuclei.length - aliveNuclei(player).length;
-    const recoverNeed = player.mods?.recoverNeed || PLAYER.proteinPerNucleus;
-    const proteinValue = player.mods?.proteinValue || 1;
     const magnet = player.mods?.proteinMagnet || 0;
 
     for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
@@ -208,23 +229,8 @@ export class Game {
         }
       }
       if (!anyMouthTouchesPoint(player, p.x, p.y, p.r, world, 1)) continue;
-
       level.proteins.splice(i, 1);
-      const gained = p.value * proteinValue;
-      level.proteinConsumed += p.value;
-      spawnBurst(level, p.x, p.y, p.color, 4);
-
-      if (missing > 0) {
-        player.recoverProgress = (player.recoverProgress || 0) + gained;
-        if (player.recoverProgress >= recoverNeed) {
-          player.recoverProgress -= recoverNeed;
-          if (restoreOneNucleus(player)) {
-            spawnBurst(level, player.x, player.y, player.coreColor, 14);
-          }
-        }
-      } else {
-        level.points += gained;
-      }
+      this._applyProteinGain(p.value, p.x, p.y, p.color);
     }
 
     // 稀有能力拾取
@@ -246,15 +252,17 @@ export class Game {
       }
     }
 
-    const canEvolve = this._canEvolve() && !player.evolutionTween;
     for (let i = level.dnas.length - 1; i >= 0; i -= 1) {
       const d = level.dnas[i];
       d.phase += 0.04;
-      if (!canEvolve) continue;
       if (!anyMouthTouchesPoint(player, d.x, d.y, d.r, world, 2)) continue;
       level.dnas.splice(i, 1);
-      this._evolve();
-      break;
+      // DNA 也算蛋白质；可进化时额外触发进化
+      this._applyProteinGain(d.value || 2, d.x, d.y, d.color);
+      if (this._canEvolve() && !player.evolutionTween) {
+        this._evolve();
+        break;
+      }
     }
   }
 
@@ -357,14 +365,18 @@ export class Game {
     return true;
   }
 
-  _beginLayerTransition(nextLayer) {
+  _beginLayerTransition(nextLayer, accent) {
     if (this.transition) return;
     this.transition = {
       phase: "out",
       t: 0,
       duration: 0.7,
       nextLayer,
+      accent: accent || null,
     };
+    // 返回上一层时清空本层进度标记；createLevel 会重刷 NPC / 蛋白
+    this.playerState.evolvedThisLayer = false;
+    this.playerState.points = this.level?.points ?? this.playerState.points;
     audio.playPortalCue();
   }
 
@@ -459,21 +471,40 @@ export class Game {
 
   _updatePortal(dt) {
     const level = this.level;
-    if (!level.portal) return;
-    level.portal.pulse += dt;
-    level.portal.open = this._portalOpen();
-    if (!level.portal.open) return;
-
     const player = level.player;
-    const dist = wrappedOffset(
-      player.x,
-      player.y,
-      level.portal.x,
-      level.portal.y,
-      level.world
-    ).dist;
-    if (dist < level.portal.r) {
-      this._beginLayerTransition(level.layerIndex + 1);
+
+    if (level.portal) {
+      level.portal.pulse += dt;
+      level.portal.open = this._portalOpen();
+      if (level.portal.open) {
+        const dist = wrappedOffset(
+          player.x,
+          player.y,
+          level.portal.x,
+          level.portal.y,
+          level.world
+        ).dist;
+        if (dist < level.portal.r) {
+          this._beginLayerTransition(level.layerIndex + 1, level.portal.color);
+          return;
+        }
+      }
+    }
+
+    // 上一层出口：始终开启；进入后 createLevel 重置 NPC 与蛋白质
+    if (level.exitPortal && level.layerIndex > 0) {
+      level.exitPortal.pulse += dt;
+      level.exitPortal.open = true;
+      const distUp = wrappedOffset(
+        player.x,
+        player.y,
+        level.exitPortal.x,
+        level.exitPortal.y,
+        level.world
+      ).dist;
+      if (distUp < level.exitPortal.r) {
+        this._beginLayerTransition(level.layerIndex - 1, level.exitPortal.color);
+      }
     }
   }
 
