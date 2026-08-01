@@ -52,14 +52,18 @@ export class AudioManager {
     this.musicGain = null;
     this.sfxGain = null;
     this.threatGain = null;
+    this.bossThreatGain = null;
     this.musicBus = null;
     this.reverb = null;
     this.bgmNodes = [];
     this.threatNodes = [];
+    this.bossThreatNodes = [];
     this.started = false;
     this._threatLevel = 0;
+    this._bossThreat = 0;
     this._melodyTimer = 0;
     this._stopMelody = false;
+    this._heartbeatTimer = 0;
   }
 
   getSettings() {
@@ -92,10 +96,13 @@ export class AudioManager {
       this.musicGain = this.ctx.createGain();
       this.sfxGain = this.ctx.createGain();
       this.threatGain = this.ctx.createGain();
+      this.bossThreatGain = this.ctx.createGain();
       this.musicGain.connect(this.master);
       this.sfxGain.connect(this.master);
       this.threatGain.connect(this.master);
+      this.bossThreatGain.connect(this.master);
       this.threatGain.gain.value = 0;
+      this.bossThreatGain.gain.value = 0;
 
       this.musicBus = this.ctx.createGain();
       this.musicBus.gain.value = 1;
@@ -116,6 +123,7 @@ export class AudioManager {
     if (!this.started) {
       this._startBgm();
       this._startThreatPad();
+      this._startBossThreatPad();
       this._scheduleMelodyLoop();
       this.started = true;
     }
@@ -127,13 +135,19 @@ export class AudioManager {
     const t = this.ctx?.currentTime || 0;
     const music = this.musicEnabled ? this.musicVolume : 0;
     const sfx = this.sfxEnabled ? this.sfxVolume : 0;
+    // Boss 近身时压低 BGM，腾出紧张层空间
+    const duck = 1 - Math.min(0.55, this._bossThreat * 0.55);
     this.musicGain.gain.cancelScheduledValues(t);
-    this.musicGain.gain.setTargetAtTime(music * 0.85, t, 0.1);
+    this.musicGain.gain.setTargetAtTime(music * 0.85 * duck, t, 0.12);
     this.sfxGain.gain.cancelScheduledValues(t);
     this.sfxGain.gain.setTargetAtTime(sfx, t, 0.05);
     if (this.threatGain) {
-      const threat = this.musicEnabled ? this.musicVolume * this._threatLevel * 0.55 : 0;
+      const threat = this.musicEnabled ? this.musicVolume * this._threatLevel * 0.5 : 0;
       this.threatGain.gain.setTargetAtTime(threat, t, 0.2);
+    }
+    if (this.bossThreatGain) {
+      const boss = this.musicEnabled ? this.musicVolume * this._bossThreat * 0.95 : 0;
+      this.bossThreatGain.gain.setTargetAtTime(boss, t, 0.14);
     }
   }
 
@@ -380,7 +394,7 @@ export class AudioManager {
   _startThreatPad() {
     const ctx = this.ctx;
     const out = this.threatGain;
-    // 柔和阴郁：正弦小二度，不用锯齿
+    // 普通攻击生物：柔和阴郁小二度
     const freqs = [PENT.D3 * 0.5, PENT.D3 * 0.5 * (16 / 15), PENT.A3 * 0.5];
     for (let i = 0; i < freqs.length; i += 1) {
       const osc = ctx.createOscillator();
@@ -406,12 +420,123 @@ export class AudioManager {
     }
   }
 
-  setThreatLevel(level) {
+  /** Boss 专属：更暗、更密、带心跳脉冲与增三度压迫 */
+  _startBossThreatPad() {
+    const ctx = this.ctx;
+    const out = this.bossThreatGain;
+    // 低音簇：小二度 + 增四度，制造不安
+    const freqs = [
+      PENT.D3 * 0.5,
+      PENT.D3 * 0.5 * (16 / 15),
+      PENT.D3 * 0.5 * Math.sqrt(2),
+      PENT.A3 * 0.5 * (15 / 16),
+    ];
+    for (let i = 0; i < freqs.length; i += 1) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc.type = i === 0 ? "sine" : "triangle";
+      osc.frequency.value = freqs[i];
+      filter.type = "lowpass";
+      filter.frequency.value = 260 + i * 40;
+      gain.gain.value = 0.11 - i * 0.015;
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(out);
+      const lfo = ctx.createOscillator();
+      const lfoG = ctx.createGain();
+      lfo.frequency.value = 0.15 + i * 0.04;
+      lfoG.gain.value = 2.2;
+      lfo.connect(lfoG);
+      lfoG.connect(osc.frequency);
+      lfo.start();
+      osc.start();
+      this.bossThreatNodes.push(osc, gain, filter, lfo, lfoG);
+    }
+
+    // 持续心跳包络：双搏节奏
+    const pulse = ctx.createGain();
+    pulse.gain.value = 0.35;
+    // 把 pad 再经一层脉冲会太复杂；改用独立低音心跳音
+    const heart = ctx.createOscillator();
+    const heartFilter = ctx.createBiquadFilter();
+    const heartGain = ctx.createGain();
+    heart.type = "sine";
+    heart.frequency.value = 48;
+    heartFilter.type = "lowpass";
+    heartFilter.frequency.value = 120;
+    heartGain.gain.value = 0.0001;
+    heart.connect(heartFilter);
+    heartFilter.connect(heartGain);
+    heartGain.connect(out);
+    heart.start();
+    this.bossThreatNodes.push(heart, heartFilter, heartGain, pulse);
+    this._heartGain = heartGain;
+    this._scheduleHeartbeat();
+  }
+
+  _scheduleHeartbeat() {
+    if (!this.ctx || !this._heartGain) return;
+    const beat = () => {
+      if (!this.ctx || !this._heartGain) return;
+      const level = this._bossThreat;
+      if (this.musicEnabled && level > 0.08) {
+        const now = this.ctx.currentTime;
+        const amp = 0.04 + level * 0.22;
+        const g = this._heartGain.gain;
+        g.cancelScheduledValues(now);
+        g.setValueAtTime(0.0001, now);
+        g.exponentialRampToValueAtTime(amp, now + 0.04);
+        g.exponentialRampToValueAtTime(0.0001, now + 0.22);
+        // 第二下轻搏
+        g.setValueAtTime(0.0001, now + 0.28);
+        g.exponentialRampToValueAtTime(amp * 0.55, now + 0.32);
+        g.exponentialRampToValueAtTime(0.0001, now + 0.5);
+        // 近身时偶尔加紧张短刺
+        if (level > 0.55 && Math.random() < 0.45) {
+          this._playBossSting(now + 0.05, level);
+        }
+      }
+      // 越近心跳越快
+      const bpm = 62 + this._bossThreat * 58;
+      const interval = (60 / bpm) * 1000;
+      this._heartbeatTimer = window.setTimeout(beat, interval);
+    };
+    this._heartbeatTimer = window.setTimeout(beat, 600);
+  }
+
+  _playBossSting(when, level) {
+    if (!this.ctx || !this.bossThreatGain) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(110, when);
+    osc.frequency.exponentialRampToValueAtTime(55, when + 0.35);
+    filter.type = "bandpass";
+    filter.frequency.value = 180;
+    filter.Q.value = 4;
+    const amp = 0.06 + level * 0.1;
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(amp, when + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.4);
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.bossThreatGain);
+    osc.start(when);
+    osc.stop(when + 0.45);
+  }
+
+  /**
+   * @param {number} level 普通攻击威胁 0..1
+   * @param {number} [bossLevel] Boss 威胁 0..1（更强压迫）
+   */
+  setThreatLevel(level, bossLevel = 0) {
     this._threatLevel = Math.max(0, Math.min(1, level));
-    if (!this.threatGain || !this.ctx) return;
-    const t = this.ctx.currentTime;
-    const v = this.musicEnabled ? this.musicVolume * this._threatLevel * 0.6 : 0;
-    this.threatGain.gain.setTargetAtTime(v, t, 0.25);
+    this._bossThreat = Math.max(0, Math.min(1, bossLevel));
+    if (!this.ctx) return;
+    this._syncGains();
   }
 
   /** 升级：轻柔五声琶音，像竖琴掠过水面 */

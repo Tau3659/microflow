@@ -1,4 +1,4 @@
-import { EVOLUTIONS, LAYERS, PLAYER } from "./config.js";
+import { EVOLUTIONS, PLAYER } from "./config.js";
 import {
   updatePlayer,
   updateEnemy,
@@ -71,7 +71,7 @@ export class Game {
       };
     }
     this.transition = null;
-    audio.setThreatLevel(0);
+    audio.setThreatLevel(0, 0);
     this.level = createLevel(layerIndex, this.playerState);
     this.ended = false;
     this.running = true;
@@ -95,7 +95,7 @@ export class Game {
   goHome() {
     this.stop();
     this.transition = null;
-    audio.setThreatLevel(0);
+    audio.setThreatLevel(0, 0);
     this.hud.hide();
     this.overlay.hide();
     this.onStateChange?.("title");
@@ -119,8 +119,7 @@ export class Game {
   }
 
   _portalOpen() {
-    if (this.level.layerIndex >= LAYERS.length - 1) return false;
-    // 进化后，或本层蛋白质吃光后，必须进入下一层
+    // 无限流：进化后或本层蛋白质吃光即可进入下一层
     return this.level.evolvedThisLayer || this.level.proteinsExhausted;
   }
 
@@ -187,15 +186,6 @@ export class Game {
     this.playerState.abilities = { ...(player.abilities || {}) };
     this._centerCamera(false);
     this._updateHud();
-
-    // 最终形态且击败最终 Boss
-    if (
-      level.layerIndex === LAYERS.length - 1 &&
-      level.bossDefeated &&
-      player.evolutionId >= EVOLUTIONS.length - 1
-    ) {
-      this._end("win");
-    }
   }
 
   _collectPickups(dt = 0.016) {
@@ -288,10 +278,8 @@ export class Game {
     if (level.proteinsExhausted) return;
     if (ecosystemProtein(level) > 0) return;
     level.proteinsExhausted = true;
-    if (level.layerIndex < LAYERS.length - 1) {
-      spawnBurst(level, level.player.x, level.player.y, level.layer.accent, 20);
-      if (level.portal) level.portal.open = true;
-    }
+    spawnBurst(level, level.player.x, level.player.y, level.layer.accent, 20);
+    if (level.portal) level.portal.open = true;
   }
 
   _evolve() {
@@ -309,32 +297,45 @@ export class Game {
     spawnBurst(level, player.x, player.y, player.coreColor || evo.coreColor, 16);
     audio.playEvolve();
 
-    if (level.portal && level.layerIndex < LAYERS.length - 1) {
-      level.portal.open = true;
-    }
+    if (level.portal) level.portal.open = true;
   }
 
   _updateThreatAudio() {
     const level = this.level;
     const player = level.player;
-    let nearest = Infinity;
+    let nearestHostile = Infinity;
+    let nearestBoss = Infinity;
     for (const c of level.creatures) {
-      if (!c.alive || !isAggressive(c)) continue;
+      if (!c.alive) continue;
       const d = wrappedOffset(player.x, player.y, c.x, c.y, level.world).dist;
-      if (d < nearest) nearest = d;
+      if (c.kind === "boss") {
+        if (d < nearestBoss) nearestBoss = d;
+        continue;
+      }
+      if (!isAggressive(c)) continue;
+      if (d < nearestHostile) nearestHostile = d;
     }
-    // 约 420 内开始听到，越近越大
-    const range = 420;
-    const levelThreat =
-      nearest < range ? Math.pow(1 - nearest / range, 1.35) : 0;
-    audio.setThreatLevel(levelThreat);
+    const hostileRange = 380;
+    const bossRange = 520;
+    const hostileThreat =
+      nearestHostile < hostileRange
+        ? Math.pow(1 - nearestHostile / hostileRange, 1.35)
+        : 0;
+    // Boss 领地更大、曲线更陡，近身时明显压迫
+    let bossThreat = 0;
+    if (nearestBoss < bossRange) {
+      const t = 1 - nearestBoss / bossRange;
+      bossThreat = Math.pow(t, 1.1);
+      if (nearestBoss < 220) bossThreat = Math.min(1, bossThreat + 0.2);
+    }
+    audio.setThreatLevel(hostileThreat, bossThreat);
   }
 
   /** @returns {boolean} true 表示本帧跳过常规更新 */
   _updateTransition(dt) {
     const tr = this.transition;
     if (!tr) return false;
-    audio.setThreatLevel(0);
+    audio.setThreatLevel(0, 0);
     tr.t += dt / tr.duration;
     if (tr.phase === "out") {
       if (tr.t >= 1) {
@@ -472,10 +473,7 @@ export class Game {
       level.world
     ).dist;
     if (dist < level.portal.r) {
-      const next = level.layerIndex + 1;
-      if (next < LAYERS.length) {
-        this._beginLayerTransition(next);
-      }
+      this._beginLayerTransition(level.layerIndex + 1);
     }
   }
 

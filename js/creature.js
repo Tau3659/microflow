@@ -4,6 +4,7 @@ import {
   MORPH,
   PLAYER,
   PLAYER_LOOK,
+  SCALE,
   SPECIES,
   TEMPER,
   WARNING,
@@ -246,9 +247,10 @@ export function speedScaleForRadius(radius) {
   return clamp(ref / Math.max(8, radius), PLAYER.minSpeedScale || 0.48, PLAYER.maxSpeedScale || 1.15);
 }
 
-function bodyProteinFor(radius, kind = "normal") {
-  if (kind === "boss") return Math.max(8, Math.round(radius / 9));
-  return Math.max(1, Math.round(radius / 13));
+function bodyProteinFor(radius, kind = "normal", complexity = 1) {
+  if (kind === "boss") return Math.max(8, 5 + Math.round(complexity * 0.9));
+  if (kind === "player") return Math.max(2, Math.round(complexity + 1));
+  return Math.max(1, Math.round(1.5 + complexity * 0.7 + radius / 40));
 }
 
 function lerp(a, b, t) {
@@ -351,7 +353,7 @@ export function createPlayer(x, y, evolutionId = 0, savedAbilities = null) {
     invuln: 0,
     recoverProgress: 0,
     storedProtein: 0,
-    bodyProtein: bodyProteinFor(evo.radius, "player"),
+    bodyProtein: bodyProteinFor(evo.radius, "player", evo.complexity || 1),
     evolutionTween: null,
     morphMix: 0,
     abilities: null,
@@ -375,7 +377,7 @@ export function applyEvolution(player, evolutionId) {
   player.nuclei = makeNuclei(evo.nuclei, evo.radius, evo.morph);
   recomputeAbilityMods(player);
   syncPlayerMouth(player);
-  player.bodyProtein = bodyProteinFor(evo.radius, "player");
+  player.bodyProtein = bodyProteinFor(evo.radius, "player", evo.complexity || 1);
   player.recoverProgress = 0;
   player.evolutionTween = null;
   player.morphMix = 1;
@@ -584,20 +586,27 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
   const speciesId = pick(layer.speciesPool || ["ecoli"]);
   const species = SPECIES[speciesId] || SPECIES.ecoli;
   const morph = species.morph || pick(layer.morphPool || [evo.morph]);
-  // 同等级体型稳定：仅允许极小抖动，相对大小（含核）保持一致
-  const radius = evo.radius * (0.96 + Math.random() * 0.08);
+  // 屏幕比例固定：体半径几乎恒定，复杂度走结构
+  const layerCx = layer.complexity || 1;
+  const complexity = Math.min(14, (evo.complexity || 1) + Math.floor(layerCx / 2));
+  const radius = SCALE.npc * (0.94 + Math.random() * 0.1);
   const temper = rollTemper(layer.temperWeights);
   const look = paletteForTemper(temper, layer);
   if (species.tint && temper !== TEMPER.HOSTILE) {
     look.color = species.tint;
   }
   const segments = [];
-  const count = Math.max(3, evo.segmentCount - 1);
-  const spacing = Math.max(7, evo.radius * 0.28);
+  const count = Math.min(14, Math.max(3, evo.segmentCount - 1 + Math.floor(layerCx / 3)));
+  const spacing = Math.max(6, radius * 0.3);
   for (let i = 0; i < count; i += 1) {
     segments.push({ x: x - i * spacing, y });
   }
-  const complexity = evo.complexity || 1;
+  const nucleusCount = Math.min(5, 1 + Math.floor(complexity / 3));
+  const mouthCount = Math.min(3, 1 + Math.floor((complexity - 1) / 4));
+  const baseFlagella =
+    species.flagella ?? (morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM ? 1 : 0);
+  const baseSpikes = species.spikes ?? (morph === MORPH.VIRUS ? 8 : 0);
+  const baseColony = species.colonyCells ?? (morph === MORPH.COLONY ? 5 : 0);
   return {
     id: nextId++,
     kind: "normal",
@@ -617,13 +626,13 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     membrane: look.membrane,
     aggressive: look.aggressive,
     warning: look.warning,
-    flagella: species.flagella ?? (morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM ? 1 : 0),
-    spikes: species.spikes ?? (morph === MORPH.VIRUS ? 10 : 0),
-    colonyCells: species.colonyCells ?? (morph === MORPH.COLONY ? 5 : 0),
+    flagella: Math.min(7, baseFlagella + Math.floor(layerCx / 4)),
+    spikes: Math.min(22, baseSpikes + Math.floor(layerCx / 2)),
+    colonyCells: Math.min(14, baseColony + Math.floor(layerCx / 3)),
     cilia: !!(species.cilia ?? (morph === MORPH.COCCUS && complexity >= 2)),
-    organelles: evo.organelles || 0,
-    membraneLayers: evo.membraneLayers || 1,
-    vacuoles: evo.vacuoles || 0,
+    organelles: Math.min(8, (evo.organelles || 0) + Math.floor(layerCx / 3)),
+    membraneLayers: Math.min(3, (evo.membraneLayers || 1) + Math.floor(layerCx / 5)),
+    vacuoles: Math.min(5, (evo.vacuoles || 0) + Math.floor(layerCx / 4)),
     cellBridges: !!(species.cellBridges ?? (morph === MORPH.COLONY && complexity >= 3)),
     capsidFacets: species.capsidFacets || evo.capsidFacets || 0,
     curve: species.curve || 0,
@@ -639,8 +648,8 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     facets: species.facets || 0,
     legs: species.legs || 2,
     segments,
-    nuclei: makeNuclei(1, radius, morph),
-    ...mouthBundle(morph, radius, 1),
+    nuclei: makeNuclei(nucleusCount, radius, morph),
+    ...mouthBundle(morph, radius, mouthCount),
     pulse: Math.random() * 10,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
@@ -654,7 +663,7 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     fleeAngle: 0,
     alive: true,
     storedProtein: 0,
-    bodyProtein: bodyProteinFor(radius, "normal"),
+    bodyProtein: bodyProteinFor(radius, "normal", complexity),
     dropDna: Math.random() < 0.45 ? 1 : 0,
   };
 }
@@ -664,11 +673,14 @@ export function createBoss(x, y, layer) {
   const speciesId = b.species || "ecoli";
   const species = SPECIES[speciesId] || {};
   const morph = b.morph || species.morph || MORPH.BACILLUS;
-  const complexity = Math.min(5, (layer.id || 0) + 3);
+  const complexity = Math.min(16, (layer.complexity || layer.id || 0) + 3);
+  const radius = SCALE.boss;
+  const segCount = Math.min(16, 8 + Math.floor(complexity / 2));
   const segments = [];
-  for (let i = 0; i < 14; i += 1) {
-    segments.push({ x: x - i * Math.max(10, b.radius * 0.22), y });
+  for (let i = 0; i < segCount; i += 1) {
+    segments.push({ x: x - i * Math.max(7, radius * 0.24), y });
   }
+  const nuclei = Math.min(8, b.nuclei || 3);
   return {
     id: nextId++,
     kind: "boss",
@@ -683,7 +695,7 @@ export function createBoss(x, y, layer) {
     vx: 0,
     vy: 0,
     angle: 0,
-    radius: b.radius,
+    radius,
     morph,
     complexity,
     curve: species.curve || 0,
@@ -691,7 +703,7 @@ export function createBoss(x, y, layer) {
     elongate: !!species.elongate,
     hollow: !!species.hollow,
     envelope: !!species.envelope,
-    legs: species.legs || 3,
+    legs: Math.min(6, (species.legs || 3) + Math.floor(complexity / 5)),
     color: b.color,
     coreColor: "#ffe0dc",
     membrane: b.membrane || "#4a2020",
@@ -699,14 +711,14 @@ export function createBoss(x, y, layer) {
     spikes: b.spikes || 0,
     colonyCells: b.colonyCells || 0,
     cilia: !!b.cilia,
-    organelles: 2 + complexity,
-    membraneLayers: Math.min(3, 1 + Math.floor(complexity / 2)),
-    vacuoles: Math.max(1, complexity - 1),
+    organelles: Math.min(10, 2 + complexity),
+    membraneLayers: Math.min(3, 1 + Math.floor(complexity / 3)),
+    vacuoles: Math.min(6, Math.max(1, Math.floor(complexity / 2))),
     cellBridges: morph === MORPH.COLONY,
     capsidFacets: morph === MORPH.VIRUS || morph === MORPH.PHAGE ? 8 : 0,
     segments,
-    nuclei: makeNuclei(b.nuclei, b.radius, morph),
-    ...mouthBundle(morph, b.radius, Math.min(3, 1 + Math.floor(b.nuclei / 2))),
+    nuclei: makeNuclei(nuclei, radius, morph),
+    ...mouthBundle(morph, radius, Math.min(4, 1 + Math.floor(nuclei / 2))),
     pulse: 0,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
@@ -720,15 +732,15 @@ export function createBoss(x, y, layer) {
     fleeAngle: 0,
     alive: true,
     storedProtein: 0,
-    bodyProtein: bodyProteinFor(b.radius, "boss"),
-    dropDna: 2 + Math.floor(b.nuclei / 2),
+    bodyProtein: bodyProteinFor(radius, "boss", complexity),
+    dropDna: 2 + Math.floor(nuclei / 2),
   };
 }
 
 /** 下一层隐约可见的幽灵生物（不可交互） */
 export function createGhost(x, y, nextLayer) {
   const morph = pick(nextLayer.morphPool || [MORPH.COCCUS]);
-  const radius = 18 + Math.random() * 36;
+  const radius = SCALE.ghost * (0.85 + Math.random() * 0.25);
   return {
     kind: "ghost",
     x,

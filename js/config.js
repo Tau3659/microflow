@@ -8,16 +8,25 @@ export const MORPH = {
   PHAGE: "phage",
 };
 
+/**
+ * 屏幕体型比例基本固定：升级/深层靠结构复杂度，不靠体积膨胀
+ */
+export const SCALE = {
+  player: [22, 23, 24, 25, 25],
+  npc: 20,
+  boss: 34,
+  ghost: 22,
+};
+
 /** 进化形态：原核 → 真核单细胞 → 多细胞 → 复杂多细胞 → 病毒聚合体
- *  volume 随等级增大；细胞核半径 = radius * nucleusRadiusFactor（同级相对比例不变）
- *  complexity 升高时外形结构更丰富
+ *  半径几乎恒定；complexity / 核 / 节 / 刺突等随级升高
  */
 export const EVOLUTIONS = [
   {
     id: 0,
     name: "原核细胞",
     morph: MORPH.BACILLUS,
-    radius: 18,
+    radius: SCALE.player[0],
     segmentCount: 3,
     nuclei: 1,
     color: "#3ecfb0",
@@ -34,7 +43,7 @@ export const EVOLUTIONS = [
     id: 1,
     name: "真核单细胞",
     morph: MORPH.COCCUS,
-    radius: 28,
+    radius: SCALE.player[1],
     segmentCount: 5,
     nuclei: 2,
     color: "#5ec4c8",
@@ -53,8 +62,8 @@ export const EVOLUTIONS = [
     id: 2,
     name: "原始多细胞",
     morph: MORPH.COLONY,
-    radius: 40,
-    segmentCount: 8,
+    radius: SCALE.player[2],
+    segmentCount: 7,
     nuclei: 3,
     color: "#e8c27a",
     coreColor: "#ffe6a8",
@@ -73,8 +82,8 @@ export const EVOLUTIONS = [
     id: 3,
     name: "复杂多细胞",
     morph: MORPH.COLONY,
-    radius: 54,
-    segmentCount: 12,
+    radius: SCALE.player[3],
+    segmentCount: 9,
     nuclei: 4,
     color: "#7eb6ff",
     coreColor: "#d4e7ff",
@@ -83,7 +92,7 @@ export const EVOLUTIONS = [
     complexity: 4,
     mouths: 1,
     flagella: 0,
-    colonyCells: 10,
+    colonyCells: 9,
     organelles: 5,
     membraneLayers: 2,
     vacuoles: 3,
@@ -94,8 +103,8 @@ export const EVOLUTIONS = [
     id: 4,
     name: "病毒聚合体",
     morph: MORPH.VIRUS,
-    radius: 70,
-    segmentCount: 16,
+    radius: SCALE.player[4],
+    segmentCount: 11,
     nuclei: 5,
     color: "#e07a6a",
     coreColor: "#ffc4bc",
@@ -122,8 +131,7 @@ export const ABILITIES = {
     maxStacks: 5,
     dropRate: 0.045,
     color: "#7dffd0",
-    layers: [0, 1],
-    /** 每层：移动速度 +6% */
+    minLayer: 0,
   },
   cilia: {
     id: "cilia",
@@ -131,7 +139,7 @@ export const ABILITIES = {
     maxStacks: 4,
     dropRate: 0.04,
     color: "#b8f0ef",
-    layers: [1, 2],
+    minLayer: 1,
   },
   cellWall: {
     id: "cellWall",
@@ -139,7 +147,7 @@ export const ABILITIES = {
     maxStacks: 3,
     dropRate: 0.035,
     color: "#c9e8a0",
-    layers: [0, 1, 2],
+    minLayer: 0,
   },
   buccal: {
     id: "buccal",
@@ -147,7 +155,7 @@ export const ABILITIES = {
     maxStacks: 4,
     dropRate: 0.035,
     color: "#e8c27a",
-    layers: [1, 2, 3],
+    minLayer: 1,
   },
   capsule: {
     id: "capsule",
@@ -155,7 +163,7 @@ export const ABILITIES = {
     maxStacks: 3,
     dropRate: 0.03,
     color: "#a8d4ff",
-    layers: [0, 1, 2],
+    minLayer: 0,
   },
   gasVacuole: {
     id: "gasVacuole",
@@ -163,7 +171,7 @@ export const ABILITIES = {
     maxStacks: 3,
     dropRate: 0.028,
     color: "#d4f0ff",
-    layers: [0, 1],
+    minLayer: 0,
   },
   chromatophore: {
     id: "chromatophore",
@@ -171,7 +179,7 @@ export const ABILITIES = {
     maxStacks: 2,
     dropRate: 0.022,
     color: "#9be87a",
-    layers: [1, 2],
+    minLayer: 1,
   },
   spikeProtein: {
     id: "spikeProtein",
@@ -179,7 +187,7 @@ export const ABILITIES = {
     maxStacks: 3,
     dropRate: 0.032,
     color: "#e07a6a",
-    layers: [3],
+    minLayer: 3,
   },
   plasmid: {
     id: "plasmid",
@@ -187,7 +195,7 @@ export const ABILITIES = {
     maxStacks: 2,
     dropRate: 0.018,
     color: "#f0d7a0",
-    layers: [0, 1, 2, 3],
+    minLayer: 0,
   },
   endospore: {
     id: "endospore",
@@ -195,7 +203,7 @@ export const ABILITIES = {
     maxStacks: 2,
     dropRate: 0.015,
     color: "#e8e0c8",
-    layers: [0, 1],
+    minLayer: 0,
   },
 };
 
@@ -305,119 +313,167 @@ export const SPECIES = {
   },
 };
 
-/** 生物圈层级 */
-export const LAYERS = [
+/** 无限流主题循环模板（深度加深时颜色变暗、结构更复杂） */
+const LAYER_THEMES = [
   {
-    id: 0,
     name: "原核海域",
     bgTop: "#12505c",
     bgBottom: "#041820",
     accent: "#3ecfb0",
     protein: "#9be8d6",
     dna: "#e8c27a",
-    proteinCount: 42,
-    dnaCount: 6,
-    normalCount: 10,
-    /** 被动 / 攻击 / 可激怒 权重 */
-    /** 第一层普通生物全部被动，攻击性只留给 Boss */
-    temperWeights: { passive: 1, hostile: 0, skittish: 0 },
-    maxHostileNormals: 0,
-    requiredEvolution: 0,
     morphPool: [MORPH.BACILLUS, MORPH.BACILLUS, MORPH.SPIRILLUM],
     speciesPool: ["ecoli", "vibrio", "spirillum", "cyanobacteria", "ecoli"],
     boss: {
       name: "裂殖霸主",
       morph: MORPH.BACILLUS,
       species: "ecoli",
-      radius: 56,
-      nuclei: 3,
       color: "#c45c5c",
       membrane: "#6a2a2a",
       flagella: 4,
     },
   },
   {
-    id: 1,
     name: "单细胞带",
     bgTop: "#0a3540",
     bgBottom: "#020f14",
     accent: "#5ec4c8",
     protein: "#7fd4d8",
     dna: "#f0d7a0",
-    proteinCount: 38,
-    dnaCount: 7,
-    normalCount: 12,
-    temperWeights: { passive: 0.55, hostile: 0.1, skittish: 0.35 },
-    maxHostileNormals: 1,
-    requiredEvolution: 1,
     morphPool: [MORPH.COCCUS, MORPH.SPIRILLUM, MORPH.COCCUS],
     speciesPool: ["amoeba", "paramecium", "euglena", "diatom", "paramecium"],
     boss: {
       name: "纤毛暴君",
       morph: MORPH.COCCUS,
       species: "paramecium",
-      radius: 72,
-      nuclei: 4,
       color: "#b85c7a",
       membrane: "#6a2a48",
       cilia: true,
     },
   },
   {
-    id: 2,
     name: "多细胞礁",
     bgTop: "#061820",
     bgBottom: "#01070a",
     accent: "#e8c27a",
     protein: "#f0d7a0",
     dna: "#7eb6ff",
-    proteinCount: 34,
-    dnaCount: 8,
-    normalCount: 14,
-    temperWeights: { passive: 0.5, hostile: 0.14, skittish: 0.36 },
-    maxHostileNormals: 2,
-    requiredEvolution: 2,
     morphPool: [MORPH.COLONY, MORPH.COCCUS, MORPH.COLONY],
     speciesPool: ["volvox", "choano", "budding", "volvox", "amoeba"],
     boss: {
       name: "群核巨兽",
       morph: MORPH.COLONY,
       species: "volvox",
-      radius: 90,
-      nuclei: 5,
       color: "#8a6ad1",
       membrane: "#3a2a6a",
-      colonyCells: 11,
+      colonyCells: 8,
     },
   },
   {
-    id: 3,
     name: "病毒风暴",
     bgTop: "#040c14",
     bgBottom: "#000408",
     accent: "#7eb6ff",
     protein: "#a8ceff",
     dna: "#e07a6a",
-    proteinCount: 30,
-    dnaCount: 8,
-    normalCount: 16,
-    temperWeights: { passive: 0.48, hostile: 0.18, skittish: 0.34 },
-    maxHostileNormals: 3,
-    requiredEvolution: 3,
     morphPool: [MORPH.VIRUS, MORPH.PHAGE, MORPH.VIRUS],
     speciesPool: ["adenovirus", "influenza", "t4phage", "filamentPhage", "adenovirus"],
     boss: {
       name: "噬界母体",
       morph: MORPH.PHAGE,
       species: "t4phage",
-      radius: 108,
-      nuclei: 6,
       color: "#e07a6a",
       membrane: "#6a2020",
-      spikes: 16,
+      spikes: 12,
     },
   },
 ];
+
+function clampByte(n) {
+  return Math.max(0, Math.min(255, n | 0));
+}
+
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(full, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function rgbToHex(r, g, b) {
+  return `#${[r, g, b].map((v) => clampByte(v).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** 深度越深，色调略压暗 */
+function deepenColor(hex, depth) {
+  const { r, g, b } = hexToRgb(hex);
+  const t = Math.min(0.55, depth * 0.035);
+  return rgbToHex(r * (1 - t), g * (1 - t), b * (1 - t * 0.9));
+}
+
+/**
+ * 无限层：任意 depth >= 0 均可生成
+ * 体型固定；结构（核/刺/鞭毛/集群）随深度变复杂
+ */
+export function getLayer(depth = 0) {
+  const index = Math.max(0, depth | 0);
+  const theme = LAYER_THEMES[index % LAYER_THEMES.length];
+  const cycle = Math.floor(index / LAYER_THEMES.length);
+  const complexity = 1 + index + cycle;
+  // 第 0 层普通怪全被动；之后攻击性缓增
+  const hostile =
+    index === 0 ? 0 : Math.min(0.32, 0.08 + index * 0.025 + cycle * 0.02);
+  const skittish = index === 0 ? 0 : Math.min(0.4, 0.28 + index * 0.01);
+  const passive = Math.max(0.2, 1 - hostile - skittish);
+  const maxHostileNormals =
+    index === 0 ? 0 : Math.min(6, 1 + Math.floor(index / 2) + cycle);
+  const bossBase = theme.boss;
+  const bossNuclei = Math.min(8, 2 + Math.floor(complexity / 2));
+  const boss = {
+    ...bossBase,
+    name: cycle > 0 ? `${bossBase.name}·${cycle + 1}` : bossBase.name,
+    radius: SCALE.boss,
+    nuclei: bossNuclei,
+    flagella: Math.min(8, (bossBase.flagella || 0) + Math.floor(complexity / 3)),
+    spikes: Math.min(24, (bossBase.spikes || 0) + complexity + cycle * 2),
+    colonyCells: Math.min(
+      16,
+      (bossBase.colonyCells || 0) + Math.floor(complexity / 2) + cycle
+    ),
+    cilia: !!bossBase.cilia || complexity >= 4,
+  };
+
+  // 混入更深主题物种，随轮次丰富
+  let speciesPool = [...theme.speciesPool];
+  if (cycle > 0) {
+    const extra = LAYER_THEMES[(index + 1) % LAYER_THEMES.length].speciesPool;
+    speciesPool = speciesPool.concat(extra.slice(0, 2 + Math.min(3, cycle)));
+  }
+
+  return {
+    id: index,
+    name: cycle > 0 ? `${theme.name} ${cycle + 1}` : theme.name,
+    bgTop: deepenColor(theme.bgTop, index),
+    bgBottom: deepenColor(theme.bgBottom, index + 2),
+    accent: theme.accent,
+    protein: theme.protein,
+    dna: theme.dna,
+    proteinCount: Math.max(22, 44 - Math.min(18, index * 2)),
+    dnaCount: Math.min(12, 6 + Math.floor(index / 2)),
+    normalCount: Math.min(22, 10 + Math.floor(index * 1.2) + cycle),
+    temperWeights: { passive, hostile, skittish },
+    maxHostileNormals,
+    requiredEvolution: Math.min(EVOLUTIONS.length - 1, Math.floor(index / 2)),
+    morphPool: theme.morphPool,
+    speciesPool,
+    complexity,
+    cycle,
+    boss,
+  };
+}
+
+/** 兼容旧引用：前若干主题快照（无限流请用 getLayer） */
+export const LAYERS = Array.from({ length: 4 }, (_, i) => getLayer(i));
 
 export const WORLD = {
   width: 2600,

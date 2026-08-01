@@ -21,7 +21,7 @@ export function rollAbilityDrop(layerIndex, player, isBoss = false) {
   const owned = player?.abilities || {};
   const candidates = Object.values(ABILITIES).filter((a) => {
     if ((owned[a.id] || 0) >= a.maxStacks) return false;
-    if (a.layers && !a.layers.includes(layerIndex)) return false;
+    if (a.minLayer != null && layerIndex < a.minLayer) return false;
     return true;
   });
   if (!candidates.length) return null;

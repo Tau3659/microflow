@@ -1,4 +1,4 @@
-import { LAYERS, TEMPER, WORLD } from "./config.js";
+import { getLayer, SCALE, TEMPER, WORLD } from "./config.js";
 import { createPlayer, createNormal, createBoss, createGhost } from "./creature.js";
 import { createAbilityPickup, rollAbilityDrop } from "./abilities.js";
 
@@ -102,8 +102,7 @@ function createDeepField(layer, nextLayer) {
 }
 
 function createGhostLayer(layerIndex) {
-  const next = LAYERS[layerIndex + 1];
-  if (!next) return { ghosts: [], nextLayer: null };
+  const next = getLayer(layerIndex + 1);
   const ghosts = [];
   for (let i = 0; i < 14; i += 1) {
     ghosts.push(
@@ -112,7 +111,7 @@ function createGhostLayer(layerIndex) {
   }
   ghosts.push({
     ...createGhost(WORLD.width * 0.72, WORLD.height * 0.3, next),
-    radius: next.boss.radius * 0.85,
+    radius: SCALE.boss * 0.9,
     morph: next.boss.morph,
     color: next.boss.color,
     isBossSilhouette: true,
@@ -123,7 +122,7 @@ function createGhostLayer(layerIndex) {
 }
 
 export function createLevel(layerIndex, playerState) {
-  const layer = LAYERS[layerIndex];
+  const layer = getLayer(layerIndex);
   const spawn = { x: WORLD.width * 0.5, y: WORLD.height * 0.55 };
   const player = createPlayer(
     spawn.x,
