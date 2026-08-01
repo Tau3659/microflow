@@ -52,9 +52,10 @@ export function createAbilityPickup(def, x, y) {
   return {
     type: "ability",
     abilityId: def.id,
+    name: def.name,
     x,
     y,
-    r: 9,
+    r: 16,
     phase: Math.random() * Math.PI * 2,
     color: def.color,
     life: 28,
