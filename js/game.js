@@ -3,15 +3,15 @@ import {
   updatePlayer,
   updateEnemy,
   updateGhost,
-  applyEvolution,
+  beginEvolution,
+  updateEvolution,
   restoreOneNucleus,
   provokeCreature,
   isAggressive,
   aliveNuclei,
   nucleusWorldPos,
-  mouthWorldPos,
-  mouthTouchesNucleus,
-  mouthTouchesPoint,
+  anyMouthTouchesNucleus,
+  anyMouthTouchesPoint,
   wrapEntity,
   wrappedOffset,
 } from "./creature.js";
@@ -149,6 +149,7 @@ export class Game {
     const player = level.player;
 
     updatePlayer(player, this.input, dt);
+    if (player.evolutionTween) updateEvolution(player, dt);
     const wrap = wrapEntity(player, level.world);
     // 环面穿越时同步相机，避免“撞墙感”
     this.camera.x += wrap.wx;
@@ -189,13 +190,12 @@ export class Game {
     const level = this.level;
     const player = level.player;
     const world = level.world;
-    const mouth = mouthWorldPos(player);
     const missing = player.nuclei.length - aliveNuclei(player).length;
 
     for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
       const p = level.proteins[i];
       p.phase += 0.05;
-      if (!mouthTouchesPoint(mouth, p.x, p.y, p.r, world, 1)) continue;
+      if (!anyMouthTouchesPoint(player, p.x, p.y, p.r, world, 1)) continue;
 
       level.proteins.splice(i, 1);
       level.proteinConsumed += p.value;
@@ -214,12 +214,12 @@ export class Game {
       }
     }
 
-    const canEvolve = this._canEvolve();
+    const canEvolve = this._canEvolve() && !player.evolutionTween;
     for (let i = level.dnas.length - 1; i >= 0; i -= 1) {
       const d = level.dnas[i];
       d.phase += 0.04;
       if (!canEvolve) continue;
-      if (!mouthTouchesPoint(mouth, d.x, d.y, d.r, world, 2)) continue;
+      if (!anyMouthTouchesPoint(player, d.x, d.y, d.r, world, 2)) continue;
       level.dnas.splice(i, 1);
       this._evolve();
       break;
@@ -231,10 +231,9 @@ export class Game {
     const world = level.world;
     for (const c of level.creatures) {
       if (!c.alive) continue;
-      const mouth = mouthWorldPos(c);
       for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
         const p = level.proteins[i];
-        if (!mouthTouchesPoint(mouth, p.x, p.y, p.r, world, 1)) continue;
+        if (!anyMouthTouchesPoint(c, p.x, p.y, p.r, world, 1)) continue;
         c.storedProtein = (c.storedProtein || 0) + p.value;
         spawnBurst(level, p.x, p.y, p.color, 3);
         level.proteins.splice(i, 1);
@@ -256,14 +255,16 @@ export class Game {
   _evolve() {
     const level = this.level;
     const player = level.player;
+    if (player.evolutionTween) return;
     const next = player.evolutionId + 1;
     if (next >= EVOLUTIONS.length) return;
 
     const evo = EVOLUTIONS[next];
-    applyEvolution(player, next);
+    beginEvolution(player, next);
     level.points = 0;
     level.evolvedThisLayer = true;
-    spawnBurst(level, player.x, player.y, evo.color, 28);
+    spawnBurst(level, player.x, player.y, evo.color, 22);
+    spawnBurst(level, player.x, player.y, player.coreColor || evo.coreColor, 16);
 
     if (level.portal && level.layerIndex < LAYERS.length - 1) {
       level.portal.open = true;
@@ -282,8 +283,6 @@ export class Game {
       return;
     }
 
-    const playerMouth = mouthWorldPos(player);
-
     for (let i = level.creatures.length - 1; i >= 0; i -= 1) {
       const enemy = level.creatures[i];
       if (!enemy.alive) continue;
@@ -292,7 +291,7 @@ export class Game {
       for (const n of enemy.nuclei) {
         if (!n.alive) continue;
         const eN = nucleusWorldPos(enemy, n);
-        if (mouthTouchesNucleus(playerMouth, eN, world, PLAYER.eatRangeBonus)) {
+        if (anyMouthTouchesNucleus(player, eN, world, PLAYER.eatRangeBonus)) {
           n.alive = false;
           spawnBurst(level, eN.x, eN.y, enemy.coreColor, 8);
           if (provokeCreature(enemy)) {
@@ -316,12 +315,11 @@ export class Game {
 
       // 仅攻击性生物会用嘴吞噬玩家细胞核
       if (player.invuln > 0 || !isAggressive(enemy)) continue;
-      const enemyMouth = mouthWorldPos(enemy);
       let hit = false;
       for (const pn of aliveNuclei(player)) {
         if (hit) break;
         const pN = nucleusWorldPos(player, pn);
-        if (mouthTouchesNucleus(enemyMouth, pN, world, PLAYER.eatRangeBonus)) {
+        if (anyMouthTouchesNucleus(enemy, pN, world, PLAYER.eatRangeBonus)) {
           pn.alive = false;
           player.invuln = PLAYER.nucleusHurtCooldown;
           spawnBurst(level, pN.x, pN.y, "#e07a6a", 14);

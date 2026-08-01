@@ -86,6 +86,8 @@ function createGhostLayer(layerIndex) {
     morph: next.boss.morph,
     color: next.boss.color,
     isBossSilhouette: true,
+    blur: 3.5,
+    holdDuration: 5 + Math.random() * 3,
   });
   return { ghosts, nextLayer: next };
 }
@@ -154,29 +156,37 @@ export function spawnBurst(level, x, y, color, count = 10) {
   }
 }
 
-/** 被吃掉时分解：一次性释放体内储存的蛋白质 + 少量 DNA */
+/** 被吃掉时分解：体型越大释放蛋白质越多（体质量 + 体内储存）+ 少量 DNA */
 export function decomposeCreature(level, creature) {
   const layer = level.layer;
-  const release = Math.max(0, creature.storedProtein || 0);
+  const body = Math.max(0, creature.bodyProtein || Math.round((creature.radius || 16) / 13));
+  const stored = Math.max(0, creature.storedProtein || 0);
+  const release = body + stored;
+  const spread = Math.min(90, 28 + (creature.radius || 16) * 0.7);
   for (let i = 0; i < release; i += 1) {
     level.proteins.push(
-      createProtein(layer, creature.x + rand(-48, 48), creature.y + rand(-48, 48))
+      createProtein(
+        layer,
+        creature.x + rand(-spread, spread),
+        creature.y + rand(-spread, spread)
+      )
     );
   }
   creature.storedProtein = 0;
+  creature.bodyProtein = 0;
 
   for (let i = 0; i < (creature.dropDna || 0); i += 1) {
     level.dnas.push(
       createDna(layer, creature.x + rand(-30, 30), creature.y + rand(-30, 30))
     );
   }
-  spawnBurst(level, creature.x, creature.y, creature.color, 18);
+  spawnBurst(level, creature.x, creature.y, creature.color, 14 + Math.min(20, body));
   if (release > 0) {
-    spawnBurst(level, creature.x, creature.y, layer.protein, 10);
+    spawnBurst(level, creature.x, creature.y, layer.protein, 8 + Math.min(16, release));
   }
 }
 
-/** 场上仍流通的蛋白质：漂浮 + 生物体内储存 */
+/** 场上仍流通的蛋白质：漂浮 + 生物体内储存（体质量仅死亡时额外释放，不计入耗尽判定） */
 export function ecosystemProtein(level) {
   let stored = 0;
   for (const c of level.creatures) stored += c.storedProtein || 0;

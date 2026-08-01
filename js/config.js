@@ -25,6 +25,7 @@ export const EVOLUTIONS = [
     membrane: "#1a6b62",
     pointsToEvolve: 12,
     complexity: 1,
+    mouths: 1,
     flagella: 1,
     organelles: 0,
     membraneLayers: 1,
@@ -41,6 +42,7 @@ export const EVOLUTIONS = [
     membrane: "#2a6f78",
     pointsToEvolve: 28,
     complexity: 2,
+    mouths: 1,
     flagella: 0,
     cilia: true,
     organelles: 2,
@@ -59,6 +61,7 @@ export const EVOLUTIONS = [
     membrane: "#8a6a3a",
     pointsToEvolve: 48,
     complexity: 3,
+    mouths: 2,
     flagella: 0,
     colonyCells: 6,
     organelles: 3,
@@ -78,6 +81,7 @@ export const EVOLUTIONS = [
     membrane: "#3a5a8a",
     pointsToEvolve: 72,
     complexity: 4,
+    mouths: 2,
     flagella: 0,
     colonyCells: 10,
     organelles: 5,
@@ -98,6 +102,7 @@ export const EVOLUTIONS = [
     membrane: "#8a3a3a",
     pointsToEvolve: Infinity,
     complexity: 5,
+    mouths: 3,
     spikes: 14,
     organelles: 6,
     membraneLayers: 3,
@@ -244,6 +249,10 @@ export const PLAYER = {
   boostCooldown: 1.35,
   turnRate: 9,
   segmentSpacing: 11,
+  /** 体型越大移动越慢：相对此参考半径缩放速度 */
+  speedRefRadius: 18,
+  minSpeedScale: 0.48,
+  maxSpeedScale: 1.15,
   /** 核半径相对体半径比例；升级只改体半径，核随之等比放大 */
   nucleusRadiusFactor: 0.36,
   mouthDistFactor: 0.95,
@@ -252,6 +261,8 @@ export const PLAYER = {
   nucleusHurtCooldown: 0.9,
   /** 缺失细胞核时，吞噬这么多蛋白质可恢复 1 个核 */
   proteinPerNucleus: 7,
+  /** 进化过渡时长（成长感） */
+  evolveDuration: 2.35,
 };
 
 /** Boss 领地 */

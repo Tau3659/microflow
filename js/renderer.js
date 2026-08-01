@@ -1,5 +1,10 @@
 import { EVOLUTIONS, MORPH, PARALLAX, WARNING } from "./config.js";
-import { aliveNuclei, isAggressive, mouthWorldPos, nucleusWorldPos } from "./creature.js";
+import {
+  aliveNuclei,
+  allMouthsWorldPos,
+  isAggressive,
+  nucleusWorldPos,
+} from "./creature.js";
 
 function hexToRgba(hex, alpha) {
   const h = hex.replace("#", "");
@@ -552,18 +557,27 @@ export class Renderer {
     const fy = (flow?.y || 0) * 0.28;
     const ctx = this.ctx;
     for (const g of ghosts) {
-      forEachWrapDraw(g.x + fx, g.y + fy, ghostCam, world, this.w, this.h, 140, (x, y) => {
-        const alpha = g.isBossSilhouette ? 0.16 : 0.12;
+      const fade = Math.max(0, Math.min(1, g.alpha ?? 0));
+      if (fade < 0.02) continue;
+      forEachWrapDraw(g.x + fx, g.y + fy, ghostCam, world, this.w, this.h, 160, (x, y) => {
+        const base = g.isBossSilhouette ? 0.18 : 0.13;
+        const alpha = base * fade;
         ctx.save();
         ctx.translate(x, y);
-        const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, g.radius * 1.4);
-        glow.addColorStop(0, hexToRgba(g.color, alpha * 1.4));
+        if (typeof ctx.filter !== "undefined") {
+          ctx.filter = `blur(${(g.blur || 2.5) * (0.7 + (1 - fade) * 0.8)}px)`;
+        }
+        ctx.globalAlpha = Math.min(1, fade * 1.05);
+        const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, g.radius * 1.55);
+        glow.addColorStop(0, hexToRgba(g.color, alpha * 1.35));
         glow.addColorStop(1, hexToRgba(g.color, 0));
         ctx.fillStyle = glow;
         ctx.beginPath();
-        ctx.arc(0, 0, g.radius * 1.4, 0, Math.PI * 2);
+        ctx.arc(0, 0, g.radius * 1.55, 0, Math.PI * 2);
         ctx.fill();
-        this.drawMorphBody(g, alpha + 0.08, true);
+        this.drawMorphBody(g, alpha + 0.06, true);
+        ctx.filter = "none";
+        ctx.globalAlpha = 1;
         ctx.restore();
       });
     }
@@ -653,37 +667,56 @@ export class Renderer {
           ctx.arc(0, 0, creature.radius * 1.4, 0, Math.PI * 2);
           ctx.stroke();
         }
-        this.drawMorphBody(creature, creature.kind === "player" ? 1 : 0.92, false);
+        // 进化过渡：旧形态淡出、新形态淡入，体现成长而非瞬变
+        if (creature.kind === "player" && creature.evolutionTween && creature.renderFrom) {
+          const mix = creature.morphMix || 0;
+          const from = { ...creature, ...creature.renderFrom, radius: creature.radius };
+          const to = { ...creature, ...creature.renderTo, radius: creature.radius };
+          this.drawMorphBody(from, (1 - mix) * 0.95, false);
+          this.drawMorphBody(to, mix * 0.95, false);
+          if (mix > 0.15 && mix < 0.9) {
+            ctx.beginPath();
+            ctx.strokeStyle = hexToRgba(creature.coreColor || "#e8f4f2", 0.35 + Math.sin(this.time * 8) * 0.15);
+            ctx.lineWidth = 2;
+            ctx.arc(0, 0, creature.radius * (1.05 + mix * 0.2), 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        } else {
+          this.drawMorphBody(creature, creature.kind === "player" ? 1 : 0.92, false);
+        }
         ctx.restore();
 
-        // 嘴：相对朝向可偏转（吞噬判定点）
-        const mouth = mouthWorldPos(creature);
-        const mx = mouth.x + ox - camera.x;
-        const my = mouth.y + oy - camera.y;
-        ctx.save();
-        ctx.translate(mx, my);
-        ctx.rotate(mouth.facing || creature.angle);
-        const open = 0.72 + Math.sin(creature.pulse * 2.4) * 0.22;
-        const lip = ctx.createRadialGradient(-mouth.r * 0.2, 0, 1, 0, 0, mouth.r);
-        lip.addColorStop(0, hexToRgba("#1a3036", 0.95));
-        lip.addColorStop(0.55, hexToRgba("#031016", 0.9));
-        lip.addColorStop(1, hexToRgba(creature.membrane || creature.color, 0.35));
-        ctx.beginPath();
-        ctx.fillStyle = lip;
-        ctx.strokeStyle = hexToRgba(
-          creature.kind === "player" ? "#e8c27a" : creature.coreColor || creature.color,
-          creature.kind === "player" ? 0.9 : 0.65
-        );
-        ctx.lineWidth = 1.8;
-        ctx.ellipse(0, 0, mouth.r * open, mouth.r * 0.58, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.strokeStyle = hexToRgba("#e8f4f2", 0.4);
-        ctx.lineWidth = 1.1;
-        ctx.arc(mouth.r * 0.12, 0, mouth.r * 0.5, -1.0, 1.0);
-        ctx.stroke();
-        ctx.restore();
+        // 嘴：按形态多点布置（吞噬判定点）
+        const mouths = allMouthsWorldPos(creature);
+        for (let mi = 0; mi < mouths.length; mi += 1) {
+          const mouth = mouths[mi];
+          const mx = mouth.x + ox - camera.x;
+          const my = mouth.y + oy - camera.y;
+          ctx.save();
+          ctx.translate(mx, my);
+          ctx.rotate(mouth.facing || creature.angle);
+          const open = 0.72 + Math.sin(creature.pulse * 2.4 + mi) * 0.22;
+          const lip = ctx.createRadialGradient(-mouth.r * 0.2, 0, 1, 0, 0, mouth.r);
+          lip.addColorStop(0, hexToRgba("#1a3036", 0.95));
+          lip.addColorStop(0.55, hexToRgba("#031016", 0.9));
+          lip.addColorStop(1, hexToRgba(creature.membrane || creature.color, 0.35));
+          ctx.beginPath();
+          ctx.fillStyle = lip;
+          ctx.strokeStyle = hexToRgba(
+            creature.kind === "player" ? "#e8c27a" : creature.coreColor || creature.color,
+            creature.kind === "player" ? 0.9 : 0.65
+          );
+          ctx.lineWidth = 1.8;
+          ctx.ellipse(0, 0, mouth.r * open, mouth.r * 0.58, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba("#e8f4f2", 0.4);
+          ctx.lineWidth = 1.1;
+          ctx.arc(mouth.r * 0.12, 0, mouth.r * 0.5, -1.0, 1.0);
+          ctx.stroke();
+          ctx.restore();
+        }
 
         for (const n of creature.nuclei || []) {
           if (!n.alive) continue;

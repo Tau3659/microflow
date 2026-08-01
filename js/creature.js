@@ -1,4 +1,4 @@
-import { BOSS_AI, EVOLUTIONS, MORPH, PLAYER, TEMPER, WARNING } from "./config.js";
+import { BOSS_AI, EVOLUTIONS, MORPH, PLAYER, TEMPER, WARNING, WORLD } from "./config.js";
 
 let nextId = 1;
 
@@ -159,36 +159,134 @@ function makeNuclei(count, radius, morph = MORPH.COCCUS) {
   return points.map((p) => ({ ox: p.ox, oy: p.oy, alive: true, r: baseR }));
 }
 
-/** 嘴可在侧面/斜前方，不一定正前方 */
-function makeMouthConfig(morph, radius) {
-  let angle = 0;
-  let dist = PLAYER.mouthDistFactor;
-  if (morph === MORPH.BACILLUS) {
-    angle = (Math.random() < 0.55 ? 0 : (Math.random() < 0.5 ? 0.55 : -0.55));
-    dist = 1.02 + Math.random() * 0.12;
-  } else if (morph === MORPH.SPIRILLUM) {
-    angle = (Math.random() - 0.5) * 1.2;
-    dist = 0.95 + Math.random() * 0.2;
+/**
+ * 按外形布置嘴位：线形在顶端、圆形靠近中心、集群在外周细胞、噬菌体在头部下方等。
+ * 嘴数量随等级适度增加。
+ */
+function makeMouths(morph, radius, count = 1) {
+  const n = Math.max(1, count | 0);
+  const baseR = Math.max(3.5, radius * PLAYER.mouthRadiusFactor * (n > 1 ? 0.82 : 1));
+  const mouths = [];
+
+  if (morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM) {
+    // 线形：嘴在前进顶端，多嘴时略偏左右
+    for (let i = 0; i < n; i += 1) {
+      const spread = n === 1 ? 0 : (i - (n - 1) / 2) * 0.32;
+      mouths.push({
+        mouthAngle: spread,
+        mouthDist: morph === MORPH.SPIRILLUM ? 1.08 : 1.12,
+        mouthRadius: baseR * (i === 0 ? 1 : 0.88),
+      });
+    }
   } else if (morph === MORPH.COCCUS) {
-    angle = (Math.random() - 0.5) * Math.PI * 0.9;
-    dist = 0.88 + Math.random() * 0.2;
+    // 圆形：嘴靠近体心（略偏前），多嘴环绕近心区
+    for (let i = 0; i < n; i += 1) {
+      const a = n === 1 ? 0 : (Math.PI * 2 * i) / n;
+      mouths.push({
+        mouthAngle: a,
+        mouthDist: n === 1 ? 0.16 : 0.32,
+        mouthRadius: baseR,
+      });
+    }
   } else if (morph === MORPH.COLONY) {
-    angle = (Math.random() - 0.5) * Math.PI;
-    dist = 0.9 + Math.random() * 0.25;
+    // 集群：嘴分布在外周细胞上
+    for (let i = 0; i < n; i += 1) {
+      const a = (Math.PI * 2 * i) / n + 0.35;
+      mouths.push({
+        mouthAngle: a,
+        mouthDist: 0.88 + (i % 2) * 0.1,
+        mouthRadius: baseR * 0.95,
+      });
+    }
   } else if (morph === MORPH.VIRUS) {
-    angle = (Math.random() - 0.5) * 1.4;
-    dist = 1.05 + Math.random() * 0.15;
+    // 囊膜病毒：嘴在外壳边缘朝外
+    for (let i = 0; i < n; i += 1) {
+      const a = (Math.PI * 2 * i) / n;
+      mouths.push({
+        mouthAngle: a,
+        mouthDist: 0.92,
+        mouthRadius: baseR * 0.9,
+      });
+    }
   } else if (morph === MORPH.PHAGE) {
-    angle = 0;
-    dist = 0.55;
+    // 噬菌体：主嘴在尾刺/注射端（局部下方），额外嘴在头侧
+    mouths.push({ mouthAngle: Math.PI / 2, mouthDist: 1.05, mouthRadius: baseR });
+    for (let i = 1; i < n; i += 1) {
+      mouths.push({
+        mouthAngle: Math.PI / 2 + (i % 2 ? 0.5 : -0.5),
+        mouthDist: 0.85,
+        mouthRadius: baseR * 0.78,
+      });
+    }
   } else {
-    angle = (Math.random() - 0.5) * 1.2;
-    dist = 0.9 + Math.random() * 0.2;
+    for (let i = 0; i < n; i += 1) {
+      mouths.push({
+        mouthAngle: (Math.PI * 2 * i) / n,
+        mouthDist: 0.9,
+        mouthRadius: baseR,
+      });
+    }
   }
+
   return {
-    mouthAngle: angle,
-    mouthDist: dist,
-    mouthRadius: Math.max(4, radius * PLAYER.mouthRadiusFactor),
+    mouths,
+    mouthAngle: mouths[0].mouthAngle,
+    mouthDist: mouths[0].mouthDist,
+    mouthRadius: mouths[0].mouthRadius,
+  };
+}
+
+function mouthBundle(morph, radius, count = 1) {
+  return makeMouths(morph, radius, count);
+}
+
+/** 体型越大速度越慢 */
+export function speedScaleForRadius(radius) {
+  const ref = PLAYER.speedRefRadius || 18;
+  return clamp(ref / Math.max(8, radius), PLAYER.minSpeedScale || 0.48, PLAYER.maxSpeedScale || 1.15);
+}
+
+function bodyProteinFor(radius, kind = "normal") {
+  if (kind === "boss") return Math.max(8, Math.round(radius / 9));
+  return Math.max(1, Math.round(radius / 13));
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function lerpHex(a, b, t) {
+  const pa = parseInt(String(a).replace("#", ""), 16);
+  const pb = parseInt(String(b).replace("#", ""), 16);
+  if (Number.isNaN(pa) || Number.isNaN(pb)) return t < 0.5 ? a : b;
+  const ar = (pa >> 16) & 255;
+  const ag = (pa >> 8) & 255;
+  const ab = pa & 255;
+  const br = (pb >> 16) & 255;
+  const bg = (pb >> 8) & 255;
+  const bb = pb & 255;
+  const r = Math.round(lerp(ar, br, t));
+  const g = Math.round(lerp(ag, bg, t));
+  const bl = Math.round(lerp(ab, bb, t));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + bl).toString(16).slice(1)}`;
+}
+
+function snapshotVisual(creature) {
+  return {
+    morph: creature.morph,
+    color: creature.color,
+    coreColor: creature.coreColor,
+    membrane: creature.membrane,
+    complexity: creature.complexity || 1,
+    flagella: creature.flagella || 0,
+    spikes: creature.spikes || 0,
+    colonyCells: creature.colonyCells || 0,
+    cilia: !!creature.cilia,
+    organelles: creature.organelles || 0,
+    membraneLayers: creature.membraneLayers || 1,
+    vacuoles: creature.vacuoles || 0,
+    cellBridges: !!creature.cellBridges,
+    capsidFacets: creature.capsidFacets || 0,
   };
 }
 
@@ -222,7 +320,7 @@ export function createPlayer(x, y, evolutionId = 0) {
   for (let i = 0; i < evo.segmentCount; i += 1) {
     segments.push({ x: x - i * spacing, y });
   }
-  const mouth = makeMouthConfig(evo.morph, evo.radius);
+  const mouth = mouthBundle(evo.morph, evo.radius, evo.mouths || 1);
   return {
     id: nextId++,
     kind: "player",
@@ -243,24 +341,156 @@ export function createPlayer(x, y, evolutionId = 0) {
     invuln: 0,
     recoverProgress: 0,
     storedProtein: 0,
+    bodyProtein: bodyProteinFor(evo.radius, "player"),
+    evolutionTween: null,
+    morphMix: 0,
     alive: true,
   };
 }
 
+/** 立即定格到目标进化（过渡结束时调用） */
 export function applyEvolution(player, evolutionId) {
   const evo = EVOLUTIONS[evolutionId];
   player.evolutionId = evolutionId;
   player.radius = evo.radius;
   Object.assign(player, visualFromEvo(evo));
-  Object.assign(player, makeMouthConfig(evo.morph, evo.radius));
+  Object.assign(player, mouthBundle(evo.morph, evo.radius, evo.mouths || 1));
   player.nuclei = makeNuclei(evo.nuclei, evo.radius, evo.morph);
+  player.bodyProtein = bodyProteinFor(evo.radius, "player");
   player.recoverProgress = 0;
+  player.evolutionTween = null;
+  player.morphMix = 1;
+  player.renderFrom = null;
+  player.renderTo = null;
   while (player.segments.length < evo.segmentCount) {
     const last = player.segments[player.segments.length - 1];
     player.segments.push({ x: last.x, y: last.y });
   }
   while (player.segments.length > evo.segmentCount) player.segments.pop();
-  player.invuln = 1.2;
+  player.invuln = Math.max(player.invuln, 0.8);
+}
+
+/** 开始渐进进化：先长大，再逐渐变成新结构 */
+export function beginEvolution(player, evolutionId) {
+  const to = EVOLUTIONS[evolutionId];
+  if (!to) return;
+  const fromVisual = snapshotVisual(player);
+  const toVisual = visualFromEvo(to);
+  player.evolutionTween = {
+    fromId: player.evolutionId,
+    toId: evolutionId,
+    t: 0,
+    duration: PLAYER.evolveDuration || 2.35,
+    fromRadius: player.radius,
+    toRadius: to.radius,
+    fromVisual,
+    toVisual,
+    fromMouths: (player.mouths || []).map((m) => ({ ...m })),
+    toMouths: mouthBundle(to.morph, to.radius, to.mouths || 1).mouths,
+    targetNuclei: to.nuclei,
+    targetSegments: to.segmentCount,
+  };
+  player.evolutionId = evolutionId;
+  player.invuln = Math.max(player.invuln, PLAYER.evolveDuration || 2.35);
+  player.renderFrom = fromVisual;
+  player.renderTo = toVisual;
+  player.morphMix = 0;
+}
+
+export function updateEvolution(player, dt) {
+  const tw = player.evolutionTween;
+  if (!tw) return false;
+  tw.t += dt / tw.duration;
+  const u = clamp(tw.t, 0, 1);
+  const grow = clamp(u / 0.55, 0, 1);
+  const morph = clamp((u - 0.28) / 0.55, 0, 1);
+  const sGrow = grow * grow * (3 - 2 * grow);
+  const sMorph = morph * morph * (3 - 2 * morph);
+
+  player.radius = lerp(tw.fromRadius, tw.toRadius, sGrow);
+  player.morphMix = sMorph;
+
+  // 颜色与结构参数渐变
+  player.color = lerpHex(tw.fromVisual.color, tw.toVisual.color, sMorph);
+  player.coreColor = lerpHex(tw.fromVisual.coreColor, tw.toVisual.coreColor, sMorph);
+  player.membrane = lerpHex(tw.fromVisual.membrane, tw.toVisual.membrane, sMorph);
+  player.complexity = Math.round(lerp(tw.fromVisual.complexity, tw.toVisual.complexity, sMorph));
+  player.flagella = Math.round(lerp(tw.fromVisual.flagella, tw.toVisual.flagella, sMorph));
+  player.spikes = Math.round(lerp(tw.fromVisual.spikes, tw.toVisual.spikes, sMorph));
+  player.colonyCells = Math.round(lerp(tw.fromVisual.colonyCells, tw.toVisual.colonyCells, sMorph));
+  player.organelles = Math.round(lerp(tw.fromVisual.organelles, tw.toVisual.organelles, sMorph));
+  player.vacuoles = Math.round(lerp(tw.fromVisual.vacuoles, tw.toVisual.vacuoles, sMorph));
+  player.membraneLayers = Math.round(
+    lerp(tw.fromVisual.membraneLayers, tw.toVisual.membraneLayers, sMorph)
+  );
+  player.cilia = sMorph < 0.5 ? tw.fromVisual.cilia : tw.toVisual.cilia;
+  player.cellBridges = sMorph < 0.5 ? tw.fromVisual.cellBridges : tw.toVisual.cellBridges;
+  player.capsidFacets = Math.round(
+    lerp(tw.fromVisual.capsidFacets || 0, tw.toVisual.capsidFacets || 0, sMorph)
+  );
+  player.morph = sMorph < 0.42 ? tw.fromVisual.morph : tw.toVisual.morph;
+
+  // 嘴位插值 / 数量过渡
+  const fromM = tw.fromMouths;
+  const toM = tw.toMouths;
+  const mouthCount = Math.max(fromM.length, Math.round(lerp(fromM.length, toM.length, sMorph)));
+  const mouths = [];
+  for (let i = 0; i < mouthCount; i += 1) {
+    const a = fromM[Math.min(i, fromM.length - 1)];
+    const b = toM[Math.min(i, toM.length - 1)];
+    mouths.push({
+      mouthAngle: lerp(a.mouthAngle, b.mouthAngle, sMorph),
+      mouthDist: lerp(a.mouthDist, b.mouthDist, sMorph),
+      mouthRadius: lerp(a.mouthRadius, b.mouthRadius, sGrow),
+    });
+  }
+  player.mouths = mouths;
+  player.mouthAngle = mouths[0].mouthAngle;
+  player.mouthDist = mouths[0].mouthDist;
+  player.mouthRadius = mouths[0].mouthRadius;
+
+  // 细胞核随体型等比放大（相对过渡起点），后半段补齐数量
+  if (!tw.baseNuclei) {
+    tw.baseNuclei = player.nuclei.map((n) => ({
+      ox: n.ox,
+      oy: n.oy,
+      alive: n.alive,
+    }));
+  }
+  const scale = player.radius / Math.max(1, tw.fromRadius);
+  for (let i = 0; i < player.nuclei.length; i += 1) {
+    const base = tw.baseNuclei[i];
+    if (!base) continue;
+    player.nuclei[i].ox = base.ox * scale;
+    player.nuclei[i].oy = base.oy * scale;
+    player.nuclei[i].r =
+      player.radius * PLAYER.nucleusRadiusFactor * (player.nuclei.length <= 2 ? 0.92 : 0.82);
+  }
+  if (sMorph > 0.55 && player.nuclei.length < tw.targetNuclei) {
+    const fresh = makeNuclei(tw.targetNuclei, tw.toRadius, tw.toVisual.morph);
+    while (player.nuclei.length < tw.targetNuclei) {
+      const idx = player.nuclei.length;
+      const next = fresh[idx];
+      player.nuclei.push({
+        ox: next.ox * scale,
+        oy: next.oy * scale,
+        alive: true,
+        r: player.radius * PLAYER.nucleusRadiusFactor * 0.82,
+      });
+      tw.baseNuclei.push({ ox: next.ox, oy: next.oy, alive: true });
+    }
+  }
+
+  while (player.segments.length < tw.targetSegments) {
+    const last = player.segments[player.segments.length - 1];
+    player.segments.push({ x: last.x, y: last.y });
+  }
+
+  if (u >= 1) {
+    applyEvolution(player, tw.toId);
+    return true;
+  }
+  return false;
 }
 
 export function restoreOneNucleus(player) {
@@ -349,6 +579,7 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     segments.push({ x: x - i * spacing, y });
   }
   const complexity = evo.complexity || 1;
+  const mouthCount = Math.max(1, Math.min(evo.mouths || 1, complexity >= 4 ? 2 : 1));
   return {
     id: nextId++,
     kind: "normal",
@@ -381,7 +612,7 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     capsidFacets: evo.capsidFacets || 0,
     segments,
     nuclei: makeNuclei(1, radius, morph),
-    ...makeMouthConfig(morph, radius),
+    ...mouthBundle(morph, radius, mouthCount),
     pulse: Math.random() * 10,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
@@ -389,6 +620,7 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     provokeFlash: 0,
     alive: true,
     storedProtein: 0,
+    bodyProtein: bodyProteinFor(radius, "normal"),
     dropDna: Math.random() < 0.45 ? 1 : 0,
   };
 }
@@ -431,7 +663,7 @@ export function createBoss(x, y, layer) {
     capsidFacets: morph === MORPH.VIRUS || morph === MORPH.PHAGE ? 8 : 0,
     segments,
     nuclei: makeNuclei(b.nuclei, b.radius, morph),
-    ...makeMouthConfig(morph, b.radius),
+    ...mouthBundle(morph, b.radius, Math.min(3, 1 + Math.floor(b.nuclei / 2))),
     pulse: 0,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
@@ -442,6 +674,7 @@ export function createBoss(x, y, layer) {
     provokeFlash: 0,
     alive: true,
     storedProtein: 0,
+    bodyProtein: bodyProteinFor(b.radius, "boss"),
     dropDna: 2 + Math.floor(b.nuclei / 2),
   };
 }
@@ -460,6 +693,7 @@ export function createGhost(x, y, nextLayer) {
     color: nextLayer.accent,
     membrane: nextLayer.bgTop,
     coreColor: nextLayer.protein,
+    complexity: 2 + Math.floor(Math.random() * 2),
     flagella: morph === MORPH.BACILLUS ? 2 : 0,
     spikes: morph === MORPH.VIRUS || morph === MORPH.PHAGE ? 10 : 0,
     colonyCells: morph === MORPH.COLONY ? 6 : 0,
@@ -467,6 +701,13 @@ export function createGhost(x, y, nextLayer) {
     pulse: Math.random() * 10,
     drift: 12 + Math.random() * 22,
     driftAngle: Math.random() * Math.PI * 2,
+    /** 0..1 可见度，配合淡入淡出避免突然出现/消失 */
+    alpha: 0,
+    fade: "wait",
+    fadeT: Math.random() * 4,
+    holdDuration: 2.8 + Math.random() * 4.5,
+    fadeSpeed: 0.28 + Math.random() * 0.22,
+    blur: 2.2 + Math.random() * 2.8,
   };
 }
 
@@ -501,17 +742,45 @@ export function nucleusWorldPos(creature, nucleus) {
   };
 }
 
-/** 嘴：相对朝向可偏转，只有嘴碰到细胞核才能吞噬 */
+/** 单嘴世界坐标（兼容旧调用，取第一张嘴） */
 export function mouthWorldPos(creature) {
-  const facing = creature.angle + (creature.mouthAngle || 0);
-  const dist = creature.radius * (creature.mouthDist || PLAYER.mouthDistFactor);
-  const r = creature.mouthRadius || Math.max(4, creature.radius * PLAYER.mouthRadiusFactor);
-  return {
-    x: creature.x + Math.cos(facing) * dist,
-    y: creature.y + Math.sin(facing) * dist,
-    r,
-    facing,
-  };
+  return allMouthsWorldPos(creature)[0];
+}
+
+/** 全部嘴的世界坐标 */
+export function allMouthsWorldPos(creature) {
+  const list =
+    creature.mouths?.length > 0
+      ? creature.mouths
+      : [
+          {
+            mouthAngle: creature.mouthAngle || 0,
+            mouthDist: creature.mouthDist || PLAYER.mouthDistFactor,
+            mouthRadius: creature.mouthRadius,
+          },
+        ];
+  return list.map((m) => {
+    const facing = creature.angle + (m.mouthAngle || 0);
+    const dist = creature.radius * (m.mouthDist ?? PLAYER.mouthDistFactor);
+    const r =
+      m.mouthRadius ||
+      creature.mouthRadius ||
+      Math.max(4, creature.radius * PLAYER.mouthRadiusFactor);
+    return {
+      x: creature.x + Math.cos(facing) * dist,
+      y: creature.y + Math.sin(facing) * dist,
+      r,
+      facing,
+    };
+  });
+}
+
+export function anyMouthTouchesPoint(creature, x, y, radius, world, bonus = 0) {
+  return allMouthsWorldPos(creature).some((m) => mouthTouchesPoint(m, x, y, radius, world, bonus));
+}
+
+export function anyMouthTouchesNucleus(creature, nucleusPos, world, bonus = 0) {
+  return allMouthsWorldPos(creature).some((m) => mouthTouchesNucleus(m, nucleusPos, world, bonus));
 }
 
 export function mouthTouchesNucleus(mouth, nucleusPos, world, bonus = 0) {
@@ -535,7 +804,8 @@ export function updatePlayer(player, input, dt) {
   }
 
   const boosting = player.boostTimer > 0;
-  const speed = boosting ? PLAYER.boostSpeed : PLAYER.baseSpeed;
+  const sizeScale = speedScaleForRadius(player.radius);
+  const speed = (boosting ? PLAYER.boostSpeed : PLAYER.baseSpeed) * sizeScale;
 
   if (input.moving) {
     const targetAngle = Math.atan2(input.dirY, input.dirX);
@@ -545,8 +815,9 @@ export function updatePlayer(player, input, dt) {
     player.angle += delta * clamp(PLAYER.turnRate * dt, 0, 1);
 
     const mag = clamp(Math.hypot(input.dirX, input.dirY), 0, 1);
-    player.vx = Math.cos(player.angle) * speed * mag;
-    player.vy = Math.sin(player.angle) * speed * mag;
+    const evolveSlow = player.evolutionTween ? 0.42 : 1;
+    player.vx = Math.cos(player.angle) * speed * mag * evolveSlow;
+    player.vy = Math.sin(player.angle) * speed * mag * evolveSlow;
   } else {
     player.vx *= Math.pow(0.04, dt);
     player.vy *= Math.pow(0.04, dt);
@@ -554,7 +825,7 @@ export function updatePlayer(player, input, dt) {
 
   player.x += player.vx * dt;
   player.y += player.vy * dt;
-  player.pulse += dt * (boosting ? 4.2 : 2.2);
+  player.pulse += dt * (boosting ? 4.2 : player.evolutionTween ? 3.4 : 2.2);
   syncSegments(player);
 }
 
@@ -566,8 +837,9 @@ function steerCreature(creature, tx, ty, dt, speedMul = 1) {
   while (delta < -Math.PI) delta += Math.PI * 2;
   creature.angle += delta * clamp((creature.kind === "boss" ? 3.2 : 2.6) * dt, 0, 1);
 
-  const base = creature.kind === "boss" ? 78 : 62;
-  const speed = (base + Math.min(40, creature.radius * 0.25)) * speedMul;
+  // 大体型更慢
+  const base = creature.kind === "boss" ? 72 : 80;
+  const speed = base * speedScaleForRadius(creature.radius) * speedMul;
   creature.vx = Math.cos(creature.angle) * speed;
   creature.vy = Math.sin(creature.angle) * speed;
   creature.x += creature.vx * dt;
@@ -733,4 +1005,34 @@ export function updateGhost(ghost, dt, world) {
   wrapEntity(ghost, world);
   ghost.angle += dt * 0.4;
   ghost.pulse += dt * 1.4;
+
+  const speed = ghost.fadeSpeed || 0.35;
+  if (ghost.fade === "wait") {
+    ghost.alpha = 0;
+    ghost.fadeT = (ghost.fadeT ?? 1) - dt;
+    if (ghost.fadeT <= 0) ghost.fade = "in";
+  } else if (ghost.fade === "in") {
+    ghost.alpha = Math.min(1, (ghost.alpha || 0) + dt * speed);
+    if (ghost.alpha >= 1) {
+      ghost.fade = "hold";
+      ghost.fadeT = ghost.holdDuration || 3.5;
+    }
+  } else if (ghost.fade === "hold") {
+    ghost.alpha = 1;
+    ghost.fadeT = (ghost.fadeT ?? 3) - dt;
+    if (ghost.fadeT <= 0) ghost.fade = "out";
+  } else {
+    ghost.alpha = Math.max(0, (ghost.alpha || 0) - dt * speed);
+    if (ghost.alpha <= 0) {
+      // 淡出后再换位，避免突然出现/消失
+      ghost.x = 80 + Math.random() * (WORLD.width - 160);
+      ghost.y = 80 + Math.random() * (WORLD.height - 160);
+      ghost.driftAngle = Math.random() * Math.PI * 2;
+      ghost.angle = Math.random() * Math.PI * 2;
+      ghost.holdDuration = 2.8 + Math.random() * 4.5;
+      ghost.blur = 2.2 + Math.random() * 2.8;
+      ghost.fadeT = 0.4 + Math.random() * 1.8;
+      ghost.fade = "wait";
+    }
+  }
 }
