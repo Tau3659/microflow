@@ -631,34 +631,245 @@ export class Renderer {
     ctx.shadowBlur = 0;
   }
 
-  /** 稀有能力掉落：菱形微光，区别于普通蛋白 */
+  /** 按技能功能绘制图标（不只是色块） */
+  drawAbilityGlyph(ctx, abilityId, color, r) {
+    ctx.strokeStyle = hexToRgba("#ffffff", 0.75);
+    ctx.fillStyle = hexToRgba(color, 0.95);
+    ctx.lineWidth = Math.max(1.4, r * 0.1);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    switch (abilityId) {
+      case "flagella": {
+        // 鞭毛：波浪尾，暗示加速
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.15, 0);
+        for (let i = 0; i <= 8; i += 1) {
+          const t = i / 8;
+          ctx.lineTo(t * r * 0.95, Math.sin(t * Math.PI * 2.2) * r * 0.28);
+        }
+        ctx.strokeStyle = hexToRgba(color, 0.95);
+        ctx.lineWidth = r * 0.16;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba("#ffffff", 0.85);
+        ctx.arc(-r * 0.28, 0, r * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "cilia": {
+        // 纤毛：短毛环，暗示转向灵活
+        for (let i = 0; i < 12; i += 1) {
+          const a = (Math.PI * 2 * i) / 12;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * r * 0.28, Math.sin(a) * r * 0.28);
+          ctx.lineTo(Math.cos(a) * r * 0.85, Math.sin(a) * r * 0.85);
+          ctx.strokeStyle = hexToRgba(color, 0.9);
+          ctx.lineWidth = r * 0.1;
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba("#ffffff", 0.8);
+        ctx.arc(0, 0, r * 0.26, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "cellWall": {
+        // 细胞壁：六边形外壳，暗示防护
+        ctx.beginPath();
+        for (let i = 0; i < 6; i += 1) {
+          const a = (Math.PI * 2 * i) / 6 - Math.PI / 6;
+          const px = Math.cos(a) * r * 0.78;
+          const py = Math.sin(a) * r * 0.78;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = hexToRgba(color, 0.35);
+        ctx.fill();
+        ctx.strokeStyle = hexToRgba(color, 0.95);
+        ctx.lineWidth = r * 0.18;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba("#ffffff", 0.55);
+        ctx.lineWidth = r * 0.08;
+        ctx.arc(0, 0, r * 0.32, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case "buccal": {
+        // 胞口：张开的嘴，暗示吞噬
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba(color, 0.9);
+        ctx.ellipse(0, 0, r * 0.82, r * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(3,16,22,0.72)";
+        ctx.ellipse(0, 0, r * 0.48, r * 0.28, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba("#ffffff", 0.65);
+        ctx.lineWidth = r * 0.1;
+        ctx.arc(0, 0, r * 0.7, 0.2, Math.PI - 0.2);
+        ctx.stroke();
+        break;
+      }
+      case "capsule": {
+        // 荚膜：双层软膜，暗示减伤
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba(color, 0.45);
+        ctx.lineWidth = r * 0.22;
+        ctx.arc(0, 0, r * 0.72, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba(color, 0.95);
+        ctx.lineWidth = r * 0.12;
+        ctx.arc(0, 0, r * 0.48, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba("#ffffff", 0.55);
+        ctx.arc(-r * 0.15, -r * 0.12, r * 0.14, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "gasVacuole": {
+        // 气泡：三泡上浮，暗示加速续航
+        const bubbles = [
+          [0, r * 0.15, r * 0.42],
+          [-r * 0.38, -r * 0.25, r * 0.26],
+          [r * 0.34, -r * 0.38, r * 0.22],
+        ];
+        for (const [bx, by, br] of bubbles) {
+          ctx.beginPath();
+          ctx.fillStyle = hexToRgba(color, 0.55);
+          ctx.strokeStyle = hexToRgba("#ffffff", 0.7);
+          ctx.lineWidth = r * 0.08;
+          ctx.arc(bx, by, br, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.fillStyle = hexToRgba("#ffffff", 0.55);
+          ctx.arc(bx - br * 0.28, by - br * 0.28, br * 0.22, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case "chromatophore": {
+        // 载色体：叶绿体瓣，暗示汲取/吸引
+        for (let i = 0; i < 5; i += 1) {
+          const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+          ctx.beginPath();
+          ctx.fillStyle = hexToRgba(color, 0.85);
+          ctx.ellipse(
+            Math.cos(a) * r * 0.28,
+            Math.sin(a) * r * 0.28,
+            r * 0.34,
+            r * 0.18,
+            a,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba("#ffffff", 0.75);
+        ctx.arc(0, 0, r * 0.16, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "spikeProtein": {
+        // 刺突：放射尖刺，暗示攻击加成
+        for (let i = 0; i < 8; i += 1) {
+          const a = (Math.PI * 2 * i) / 8;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * r * 0.2, Math.sin(a) * r * 0.2);
+          ctx.lineTo(Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9);
+          ctx.strokeStyle = hexToRgba(color, 0.95);
+          ctx.lineWidth = r * 0.12;
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba("#ffffff", 0.8);
+        ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "plasmid": {
+        // 质粒：小环 DNA，暗示蛋白收益
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba(color, 0.95);
+        ctx.lineWidth = r * 0.14;
+        ctx.ellipse(0, 0, r * 0.62, r * 0.4, -0.4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r * 0.42, r * 0.26, 0.5, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case "endospore": {
+        // 芽孢：厚壁核心，暗示更快修核
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba(color, 0.4);
+        ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba(color, 0.95);
+        ctx.lineWidth = r * 0.16;
+        ctx.arc(0, 0, r * 0.58, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba("#ffffff", 0.85);
+        ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      default: {
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  /** 稀有能力掉落：更大，带功能图标 */
   drawAbilities(abilities, camera, world) {
     if (!abilities?.length) return;
     const ctx = this.ctx;
     for (const a of abilities) {
-      forEachWrapDraw(a.x, a.y, camera, world, this.w, this.h, 28, (x, y) => {
-        const pulse = 0.9 + Math.sin(this.time * 5 + a.phase) * 0.12;
+      forEachWrapDraw(a.x, a.y, camera, world, this.w, this.h, 48, (x, y) => {
+        const pulse = 0.92 + Math.sin(this.time * 4.2 + a.phase) * 0.1;
         const fade = Math.min(1, (a.life || 8) / 4);
+        const r = a.r;
         ctx.save();
         ctx.translate(x, y);
-        ctx.rotate(this.time * 1.6 + a.phase);
-        ctx.scale(pulse, pulse);
-        ctx.globalAlpha = 0.55 + fade * 0.4;
-        const g = ctx.createRadialGradient(0, 0, 1, 0, 0, a.r * 1.8);
-        g.addColorStop(0, hexToRgba("#ffffff", 0.75));
-        g.addColorStop(0.45, hexToRgba(a.color, 0.85));
+        ctx.globalAlpha = 0.65 + fade * 0.35;
+
+        // 底盘光晕
+        const g = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 1.65);
+        g.addColorStop(0, hexToRgba(a.color, 0.35));
+        g.addColorStop(0.55, hexToRgba(a.color, 0.16));
         g.addColorStop(1, hexToRgba(a.color, 0));
         ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.moveTo(0, -a.r);
-        ctx.lineTo(a.r * 0.75, 0);
-        ctx.lineTo(0, a.r);
-        ctx.lineTo(-a.r * 0.75, 0);
-        ctx.closePath();
+        ctx.arc(0, 0, r * 1.65, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = hexToRgba("#ffffff", 0.45);
-        ctx.lineWidth = 1.2;
+
+        // 圆形底板
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(3, 16, 22, 0.55)";
+        ctx.strokeStyle = hexToRgba(a.color, 0.85);
+        ctx.lineWidth = 2;
+        ctx.arc(0, 0, r * pulse, 0, Math.PI * 2);
+        ctx.fill();
         ctx.stroke();
+
+        // 功能图标（缓慢自转，便于辨认）
+        ctx.save();
+        ctx.rotate(this.time * 0.7 + a.phase * 0.2);
+        ctx.scale(pulse, pulse);
+        this.drawAbilityGlyph(ctx, a.abilityId, a.color, r * 0.72);
+        ctx.restore();
+
         ctx.restore();
       });
     }
