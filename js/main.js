@@ -8,6 +8,9 @@ const hudEl = document.getElementById("hud");
 const controlsRoot = document.getElementById("controls");
 const overlayEl = document.getElementById("overlay");
 const overlayVisual = document.getElementById("overlay-visual");
+const scoreLayer = document.getElementById("score-layer");
+const scoreCreatures = document.getElementById("score-creatures");
+const scoreProteins = document.getElementById("score-proteins");
 const btnStart = document.getElementById("btn-start");
 const btnRetry = document.getElementById("btn-retry");
 const btnHome = document.getElementById("btn-home");
@@ -43,9 +46,14 @@ const hud = {
 };
 
 const overlay = {
-  show(kind = "end") {
+  show(kind = "end", stats = null) {
     overlayVisual.classList.toggle("win", kind === "win");
     overlayVisual.classList.toggle("end", kind !== "win");
+    if (stats) {
+      scoreLayer.textContent = String(stats.layerDisplay ?? (stats.layer ?? 0) + 1);
+      scoreCreatures.textContent = String(stats.creaturesEaten ?? 0);
+      scoreProteins.textContent = String(stats.proteinsEaten ?? 0);
+    }
     overlayEl.classList.remove("hidden");
   },
   hide() {

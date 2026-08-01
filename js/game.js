@@ -48,8 +48,32 @@ export class Game {
       evolvedThisLayer: false,
       abilities: null,
     };
+    this.runStats = {
+      maxLayer: 0,
+      creaturesEaten: 0,
+      proteinsEaten: 0,
+    };
     this.onStateChange = null;
     this.transition = null;
+  }
+
+  _resetRunStats(layerIndex = 0) {
+    this.runStats = {
+      maxLayer: Math.max(0, layerIndex | 0),
+      creaturesEaten: 0,
+      proteinsEaten: 0,
+    };
+  }
+
+  getRunStats() {
+    const layer = this.level?.layerIndex ?? this.runStats.maxLayer;
+    return {
+      layer: Math.max(this.runStats.maxLayer, layer),
+      /** 展示用：从 1 起算 */
+      layerDisplay: Math.max(this.runStats.maxLayer, layer) + 1,
+      creaturesEaten: this.runStats.creaturesEaten,
+      proteinsEaten: Math.round(this.runStats.proteinsEaten),
+    };
   }
 
   init() {
@@ -69,10 +93,12 @@ export class Game {
         evolvedThisLayer: false,
         abilities: null,
       };
+      this._resetRunStats(layerIndex);
     }
     this.transition = null;
     audio.setThreatLevel(0, 0);
     this.level = createLevel(layerIndex, this.playerState);
+    this.runStats.maxLayer = Math.max(this.runStats.maxLayer, layerIndex);
     this.ended = false;
     this.running = true;
     this._centerCamera(true);
@@ -198,6 +224,7 @@ export class Game {
     const missing = player.nuclei.length - aliveNuclei(player).length;
     const gained = rawValue * proteinValue;
     level.proteinConsumed += rawValue;
+    this.runStats.proteinsEaten += rawValue;
     spawnBurst(level, burstX, burstY, burstColor, 4);
     if (missing > 0) {
       player.recoverProgress = (player.recoverProgress || 0) + gained;
@@ -351,6 +378,7 @@ export class Game {
         tr.phase = "in";
         this.playerState.evolvedThisLayer = false;
         this.level = createLevel(tr.nextLayer, this.playerState);
+        this.runStats.maxLayer = Math.max(this.runStats.maxLayer, tr.nextLayer);
         this._centerCamera(true);
         audio.playPortalCue();
       }
@@ -423,6 +451,7 @@ export class Game {
       if (aliveNuclei(enemy).length === 0) {
         enemy.alive = false;
         decomposeCreature(level, enemy);
+        this.runStats.creaturesEaten += 1;
         if (enemy.kind === "boss") {
           level.bossDefeated = true;
           level.points += 8;
@@ -511,7 +540,13 @@ export class Game {
   _end(kind = "end") {
     this.ended = true;
     this.input.hide();
-    this.overlay.show(kind);
+    if (this.level) {
+      this.runStats.maxLayer = Math.max(
+        this.runStats.maxLayer,
+        this.level.layerIndex
+      );
+    }
+    this.overlay.show(kind, this.getRunStats());
     this.onStateChange?.("overlay");
   }
 }

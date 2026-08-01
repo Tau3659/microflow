@@ -76,6 +76,20 @@
     <section id="overlay" class="screen overlay hidden">
       <div class="overlay-card">
         <div id="overlay-visual" class="overlay-visual end" aria-hidden="true"></div>
+        <ul id="scoreboard" class="scoreboard" aria-label="本局计分">
+          <li>
+            <span class="score-label">失败层数</span>
+            <span id="score-layer" class="score-value">1</span>
+          </li>
+          <li>
+            <span class="score-label">吃掉生物</span>
+            <span id="score-creatures" class="score-value">0</span>
+          </li>
+          <li>
+            <span class="score-label">吃掉蛋白</span>
+            <span id="score-proteins" class="score-value">0</span>
+          </li>
+        </ul>
         <div class="overlay-actions">
           <button id="btn-retry" class="cta icon-cta" type="button" aria-label="重试">
             <span class="icon-retry" aria-hidden="true"></span>
