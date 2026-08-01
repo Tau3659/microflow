@@ -247,9 +247,19 @@ export const PARALLAX = {
   current: 1,
 };
 
+/** 玩家品牌色：升级只变形态/体型，颜色始终一致 */
+export const PLAYER_LOOK = {
+  color: "#3ecfb0",
+  coreColor: "#9be8d6",
+  membrane: "#1a6b62",
+};
+
 export const PLAYER = {
-  baseSpeed: 105,
-  boostSpeed: 195,
+  baseSpeed: 120,
+  boostSpeed: 210,
+  /** 相对玩家常速，其他生物速度上限（略慢以便追逐/逃脱） */
+  npcSpeedFactor: 0.86,
+  bossSpeedFactor: 0.9,
   /** 基础加速时长；实际时长随进化等级提升 */
   boostDuration: 0.55,
   boostDurationPerEvo: 0.24,
@@ -259,8 +269,8 @@ export const PLAYER = {
   segmentSpacing: 11,
   /** 体型越大移动越慢：相对此参考半径缩放速度 */
   speedRefRadius: 18,
-  minSpeedScale: 0.48,
-  maxSpeedScale: 1.15,
+  minSpeedScale: 0.55,
+  maxSpeedScale: 1.12,
   /** 核半径相对体半径比例；升级只改体半径，核随之等比放大 */
   nucleusRadiusFactor: 0.36,
   mouthDistFactor: 0.95,

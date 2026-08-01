@@ -1,4 +1,13 @@
-import { BOSS_AI, EVOLUTIONS, MORPH, PLAYER, TEMPER, WARNING, WORLD } from "./config.js";
+import {
+  BOSS_AI,
+  EVOLUTIONS,
+  MORPH,
+  PLAYER,
+  PLAYER_LOOK,
+  TEMPER,
+  WARNING,
+  WORLD,
+} from "./config.js";
 
 let nextId = 1;
 
@@ -294,12 +303,13 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function visualFromEvo(evo) {
+function visualFromEvo(evo, { playerColors = false } = {}) {
+  const look = playerColors ? PLAYER_LOOK : evo;
   return {
     morph: evo.morph,
-    color: evo.color,
-    coreColor: evo.coreColor,
-    membrane: evo.membrane,
+    color: look.color,
+    coreColor: look.coreColor,
+    membrane: look.membrane,
     complexity: evo.complexity || 1,
     flagella: evo.flagella || 0,
     spikes: evo.spikes || 0,
@@ -311,6 +321,13 @@ function visualFromEvo(evo) {
     cellBridges: !!evo.cellBridges,
     capsidFacets: evo.capsidFacets || 0,
   };
+}
+
+function applyPlayerPalette(target) {
+  target.color = PLAYER_LOOK.color;
+  target.coreColor = PLAYER_LOOK.coreColor;
+  target.membrane = PLAYER_LOOK.membrane;
+  return target;
 }
 
 export function createPlayer(x, y, evolutionId = 0) {
@@ -331,7 +348,7 @@ export function createPlayer(x, y, evolutionId = 0) {
     angle: 0,
     evolutionId,
     radius: evo.radius,
-    ...visualFromEvo(evo),
+    ...visualFromEvo(evo, { playerColors: true }),
     ...mouth,
     segments,
     nuclei: makeNuclei(evo.nuclei, evo.radius, evo.morph),
@@ -356,7 +373,8 @@ export function applyEvolution(player, evolutionId) {
   const evo = EVOLUTIONS[evolutionId];
   player.evolutionId = evolutionId;
   player.radius = evo.radius;
-  Object.assign(player, visualFromEvo(evo));
+  Object.assign(player, visualFromEvo(evo, { playerColors: true }));
+  applyPlayerPalette(player);
   Object.assign(player, mouthBundle(evo.morph, evo.radius, evo.mouths || 1));
   player.nuclei = makeNuclei(evo.nuclei, evo.radius, evo.morph);
   player.bodyProtein = bodyProteinFor(evo.radius, "player");
@@ -377,8 +395,9 @@ export function applyEvolution(player, evolutionId) {
 export function beginEvolution(player, evolutionId) {
   const to = EVOLUTIONS[evolutionId];
   if (!to) return;
-  const fromVisual = snapshotVisual(player);
-  const toVisual = visualFromEvo(to);
+  applyPlayerPalette(player);
+  const fromVisual = applyPlayerPalette(snapshotVisual(player));
+  const toVisual = applyPlayerPalette(visualFromEvo(to, { playerColors: true }));
   player.evolutionTween = {
     fromId: player.evolutionId,
     toId: evolutionId,
@@ -413,10 +432,8 @@ export function updateEvolution(player, dt) {
   player.radius = lerp(tw.fromRadius, tw.toRadius, sGrow);
   player.morphMix = sMorph;
 
-  // 颜色与结构参数渐变
-  player.color = lerpHex(tw.fromVisual.color, tw.toVisual.color, sMorph);
-  player.coreColor = lerpHex(tw.fromVisual.coreColor, tw.toVisual.coreColor, sMorph);
-  player.membrane = lerpHex(tw.fromVisual.membrane, tw.toVisual.membrane, sMorph);
+  // 玩家颜色始终不变；仅结构参数渐变
+  applyPlayerPalette(player);
   player.complexity = Math.round(lerp(tw.fromVisual.complexity, tw.toVisual.complexity, sMorph));
   player.flagella = Math.round(lerp(tw.fromVisual.flagella, tw.toVisual.flagella, sMorph));
   player.spikes = Math.round(lerp(tw.fromVisual.spikes, tw.toVisual.spikes, sMorph));
@@ -621,6 +638,10 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     wanderTimer: 0,
     aggro: temper === TEMPER.HOSTILE ? 0.85 + Math.random() * 0.25 : 0.4 + Math.random() * 0.3,
     provokeFlash: 0,
+    /** 非攻击时偶尔主动靠近玩家的几率 */
+    curiousRate: temper === TEMPER.PASSIVE ? 0.34 : 0.22,
+    mood: "idle",
+    moodTimer: 0,
     alive: true,
     storedProtein: 0,
     bodyProtein: bodyProteinFor(radius, "normal"),
@@ -858,7 +879,11 @@ export function updatePlayer(player, input, dt) {
   syncSegments(player);
 }
 
-function steerCreature(creature, tx, ty, dt, speedMul = 1) {
+function playerCruiseSpeed(player) {
+  return PLAYER.baseSpeed * speedScaleForRadius(player?.radius || PLAYER.speedRefRadius);
+}
+
+function steerCreature(creature, tx, ty, dt, speedMul = 1, player = null) {
   const dir = normalize(tx, ty);
   const targetAngle = Math.atan2(dir.y, dir.x);
   let delta = targetAngle - creature.angle;
@@ -866,9 +891,15 @@ function steerCreature(creature, tx, ty, dt, speedMul = 1) {
   while (delta < -Math.PI) delta += Math.PI * 2;
   creature.angle += delta * clamp((creature.kind === "boss" ? 3.2 : 2.6) * dt, 0, 1);
 
-  // 大体型更慢
-  const base = creature.kind === "boss" ? 72 : 80;
-  const speed = base * speedScaleForRadius(creature.radius) * speedMul;
+  // 大体型更慢，且整体略低于玩家常速，保证可追可逃
+  const base = creature.kind === "boss" ? 86 : 98;
+  let speed = base * speedScaleForRadius(creature.radius) * speedMul;
+  if (player) {
+    const cap =
+      playerCruiseSpeed(player) *
+      (creature.kind === "boss" ? PLAYER.bossSpeedFactor || 0.9 : PLAYER.npcSpeedFactor || 0.86);
+    speed = Math.min(speed, cap);
+  }
   creature.vx = Math.cos(creature.angle) * speed;
   creature.vy = Math.sin(creature.angle) * speed;
   creature.x += creature.vx * dt;
@@ -954,7 +985,7 @@ function updateBoss(creature, player, dt, world, proteins = []) {
     }
   }
 
-  steerCreature(creature, tx, ty, dt, speedMul);
+  steerCreature(creature, tx, ty, dt, speedMul, player);
   wrapEntity(creature, world);
 }
 
@@ -978,11 +1009,19 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
   }
 
   if (creature.provokeFlash > 0) creature.provokeFlash -= dt;
+  if (creature.moodTimer > 0) creature.moodTimer -= dt;
 
   creature.wanderTimer -= dt;
   if (creature.wanderTimer <= 0) {
     creature.wanderTimer = 0.5 + Math.random() * 1.2;
     creature.wanderAngle += (Math.random() - 0.5) * 2;
+    // 非攻击性生物有一定几率转为好奇靠近
+    if (!isAggressive(creature) && Math.random() < (creature.curiousRate ?? 0.3)) {
+      creature.mood = "curious";
+      creature.moodTimer = 1.6 + Math.random() * 2.4;
+    } else if (creature.mood === "curious" && (creature.moodTimer || 0) <= 0) {
+      creature.mood = "idle";
+    }
   }
 
   let tx = Math.cos(creature.wanderAngle);
@@ -998,7 +1037,7 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
       const n = normalize(toPlayer.dx, toPlayer.dy);
       tx = n.x * creature.aggro + tx * 0.2;
       ty = n.y * creature.aggro + ty * 0.2;
-      speedMul = 1.08;
+      speedMul = 1.02;
     } else {
       const food = seekProtein(creature, proteins, world);
       if (food) {
@@ -1006,14 +1045,26 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
         ty = food.dy * 1.1 + ty * 0.25;
       }
     }
+  } else if (creature.mood === "curious" && (creature.moodTimer || 0) > 0 && toPlayer.dist < 420) {
+    // 好奇靠近玩家（仍非攻击）
+    const n = normalize(toPlayer.dx, toPlayer.dy);
+    tx = n.x * 1.1 + tx * 0.25;
+    ty = n.y * 1.1 + ty * 0.25;
+    speedMul = 0.78;
+    if (toPlayer.dist < Math.max(36, player.radius + creature.radius)) {
+      // 靠太近则轻轻绕开，避免贴脸
+      tx = -n.y * 0.8 + tx * 0.4;
+      ty = n.x * 0.8 + ty * 0.4;
+      speedMul = 0.7;
+    }
   } else {
-    // 被动 / 未激怒：躲避玩家，专心觅食
-    const fleeRange = creature.temper === TEMPER.PASSIVE ? 240 : 200;
+    // 被动 / 未激怒：近距离躲避，远处觅食
+    const fleeRange = creature.temper === TEMPER.PASSIVE ? 160 : 200;
     if (toPlayer.dist < fleeRange) {
       const n = normalize(toPlayer.dx, toPlayer.dy);
-      tx = -n.x * 1.35 + tx * 0.15;
-      ty = -n.y * 1.35 + ty * 0.15;
-      speedMul = 1.05;
+      tx = -n.x * 1.2 + tx * 0.2;
+      ty = -n.y * 1.2 + ty * 0.2;
+      speedMul = 0.96;
     } else {
       const food = seekProtein(creature, proteins, world, 300);
       if (food) {
@@ -1023,7 +1074,7 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
     }
   }
 
-  steerCreature(creature, tx, ty, dt, speedMul);
+  steerCreature(creature, tx, ty, dt, speedMul, player);
   wrapEntity(creature, world);
 }
 
