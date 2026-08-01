@@ -1,5 +1,6 @@
 import { Game } from "./game.js";
 
+const app = document.getElementById("app");
 const canvas = document.getElementById("game");
 const titleScreen = document.getElementById("title-screen");
 const hudEl = document.getElementById("hud");
@@ -10,6 +11,7 @@ const overlayText = document.getElementById("overlay-text");
 const btnStart = document.getElementById("btn-start");
 const btnRetry = document.getElementById("btn-retry");
 const btnHome = document.getElementById("btn-home");
+const btnExit = document.getElementById("btn-exit");
 const hudLayer = document.getElementById("hud-layer");
 const hudForm = document.getElementById("hud-form");
 const hudPoints = document.getElementById("hud-points");
@@ -73,11 +75,63 @@ function isPortrait() {
   return window.matchMedia("(orientation: portrait)").matches;
 }
 
+function isFullscreen() {
+  return !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.msFullscreenElement
+  );
+}
+
+async function requestFs(el) {
+  if (el.requestFullscreen) {
+    try {
+      await el.requestFullscreen({ navigationUI: "hide" });
+      return;
+    } catch {
+      await el.requestFullscreen();
+      return;
+    }
+  }
+  if (el.webkitRequestFullscreen) {
+    el.webkitRequestFullscreen();
+    return;
+  }
+  if (el.msRequestFullscreen) {
+    el.msRequestFullscreen();
+  }
+}
+
+async function enterFullscreen() {
+  if (isPortrait() || isFullscreen()) return;
+  try {
+    await requestFs(app);
+  } catch {
+    try {
+      await requestFs(document.documentElement);
+    } catch {
+      // 部分浏览器拒绝全屏 API；布局已用 100dvh 铺满可视区域
+    }
+  }
+  setTimeout(() => game.renderer.resize(), 80);
+}
+
+async function exitFullscreen() {
+  if (!isFullscreen()) return;
+  try {
+    if (document.exitFullscreen) await document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    else if (document.msExitFullscreen) document.msExitFullscreen();
+  } catch {
+    // ignore
+  }
+  setTimeout(() => game.renderer.resize(), 80);
+}
+
 function syncOrientation() {
   const portrait = isPortrait();
   rotateHint.hidden = !portrait;
   if (portrait) {
-    // 竖屏时暂停操作感，但仍可看标题
     document.body.classList.add("portrait-lock");
   } else {
     document.body.classList.remove("portrait-lock");
@@ -91,8 +145,16 @@ async function preferLandscape() {
       await orient.lock("landscape");
     }
   } catch {
-    // 浏览器可能拒绝，保留旋转提示即可
+    // ignore
   }
+}
+
+function returnToTitle() {
+  overlay.hide();
+  game.goHome();
+  titleScreen.classList.remove("hidden");
+  // 退出游戏后离开全屏，回到开始页
+  exitFullscreen();
 }
 
 game.onStateChange = (state) => {
@@ -109,6 +171,7 @@ btnStart.addEventListener("click", async () => {
     syncOrientation();
     return;
   }
+  await enterFullscreen();
   titleScreen.classList.add("hidden");
   game.start(0, true);
 });
@@ -119,13 +182,19 @@ btnRetry.addEventListener("click", async () => {
     syncOrientation();
     return;
   }
+  await enterFullscreen();
   overlay.hide();
   game.start(0, true);
 });
 
 btnHome.addEventListener("click", () => {
-  game.goHome();
-  titleScreen.classList.remove("hidden");
+  returnToTitle();
+});
+
+btnExit.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  returnToTitle();
 });
 
 document.addEventListener(
@@ -138,10 +207,21 @@ document.addEventListener(
 );
 
 window.addEventListener("orientationchange", () => {
-  setTimeout(() => {
+  setTimeout(async () => {
     syncOrientation();
+    if (!isPortrait() && titleScreen.classList.contains("hidden")) {
+      await enterFullscreen();
+    }
     game.renderer.resize();
-  }, 120);
+  }, 160);
 });
-window.addEventListener("resize", syncOrientation);
+
+window.addEventListener("resize", () => {
+  syncOrientation();
+  game.renderer.resize();
+});
+
+document.addEventListener("fullscreenchange", () => game.renderer.resize());
+document.addEventListener("webkitfullscreenchange", () => game.renderer.resize());
+
 syncOrientation();
