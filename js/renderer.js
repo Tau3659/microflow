@@ -79,14 +79,14 @@ export class Renderer {
     ctx.fillStyle = deep;
     ctx.fillRect(0, 0, this.w, this.h);
 
-    // 下一层雾团（慢视差 + 逆向飘动）
+    // 下一层雾团（慢视差 + 轻微逆向相对运动）
     if (level.deepField && next) {
       const deepCam = camOf(camera, PARALLAX.deep);
       ctx.save();
       ctx.globalAlpha = 0.22;
       for (const b of level.deepField.blobs) {
-        const x = b.x - deepCam.x + fx * 0.75;
-        const y = b.y - deepCam.y + fy * 0.75;
+        const x = b.x - deepCam.x + fx * 0.22;
+        const y = b.y - deepCam.y + fy * 0.22;
         if (x < -150 || y < -150 || x > this.w + 150 || y > this.h + 150) continue;
         const pulse = 1 + Math.sin(this.time * 0.7 + b.phase) * 0.08;
         const g = ctx.createRadialGradient(x, y, 2, x, y, b.r * pulse);
@@ -101,8 +101,8 @@ export class Renderer {
 
       const moteCam = camOf(camera, PARALLAX.deep * 1.15);
       for (const m of level.deepField.motes) {
-        const x = m.x - moteCam.x + fx * 1.15;
-        const y = m.y - moteCam.y + fy * 1.15;
+        const x = m.x - moteCam.x + fx * 0.35;
+        const y = m.y - moteCam.y + fy * 0.35;
         if (x < -10 || y < -10 || x > this.w + 10 || y > this.h + 10) continue;
         ctx.fillStyle = hexToRgba(m.color, 0.18 + Math.sin(this.time + m.phase) * 0.06);
         ctx.beginPath();
@@ -119,12 +119,12 @@ export class Renderer {
     ctx.fillStyle = near;
     ctx.fillRect(0, 0, this.w, this.h);
 
-    // 当前层微粒：更快逆向飘动，突出前进速度
+    // 当前层微粒：轻微逆向飘动，体现相对运动即可
     const midCam = camOf(camera, PARALLAX.mid);
-    for (let i = 0; i < 48; i += 1) {
-      const speed = 1.15 + (i % 5) * 0.45;
+    for (let i = 0; i < 40; i += 1) {
+      const speed = 0.28 + (i % 5) * 0.08;
       let px = i * 211 + midCam.x * 0.35 + fx * speed;
-      let py = i * 127 + midCam.y * 0.35 + fy * speed + Math.sin(this.time * 0.4 + i) * 10;
+      let py = i * 127 + midCam.y * 0.35 + fy * speed + Math.sin(this.time * 0.4 + i) * 6;
       px = ((px % (this.w + 50)) + (this.w + 50)) % (this.w + 50) - 25;
       py = ((py % (this.h + 50)) + (this.h + 50)) % (this.h + 50) - 25;
       ctx.fillStyle = hexToRgba(layer.protein, 0.1 + (i % 4) * 0.025);
@@ -169,11 +169,12 @@ export class Renderer {
     }
   }
 
-  drawCilia(ctx, radius, alpha) {
+  drawCilia(ctx, radius, alpha, density = 16) {
     ctx.strokeStyle = hexToRgba("#e8f4f2", alpha * 0.4);
     ctx.lineWidth = 1;
-    for (let i = 0; i < 16; i += 1) {
-      const a = (Math.PI * 2 * i) / 16 + this.time * 1.5;
+    const n = Math.max(10, density);
+    for (let i = 0; i < n; i += 1) {
+      const a = (Math.PI * 2 * i) / n + this.time * 1.5;
       const wobble = Math.sin(this.time * 8 + i) * 2;
       ctx.beginPath();
       ctx.moveTo(Math.cos(a) * radius * 0.92, Math.sin(a) * radius * 0.92);
@@ -185,10 +186,76 @@ export class Renderer {
     }
   }
 
+  /** 随进化复杂度增加的细胞器 / 液泡 / 膜层细节 */
+  drawComplexityDetails(ctx, creature, r, alpha, ghost) {
+    if (ghost) return;
+    const complexity = creature.complexity || 1;
+    if (complexity < 2) return;
+
+    const organelles = creature.organelles || 0;
+    for (let i = 0; i < organelles; i += 1) {
+      const a = (Math.PI * 2 * i) / Math.max(1, organelles) + creature.pulse * 0.08 + i * 0.4;
+      const dist = r * (0.28 + (i % 3) * 0.12);
+      const ox = Math.cos(a) * dist;
+      const oy = Math.sin(a) * dist;
+      const or = r * (0.08 + (i % 2) * 0.03);
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba(creature.coreColor || "#e8f4f2", alpha * 0.35);
+      ctx.ellipse(ox, oy, or * 1.35, or * 0.85, a, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.strokeStyle = hexToRgba("#e8f4f2", alpha * 0.22);
+      ctx.lineWidth = 0.9;
+      ctx.ellipse(ox, oy, or * 1.35, or * 0.85, a, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    const vacuoles = creature.vacuoles || 0;
+    for (let i = 0; i < vacuoles; i += 1) {
+      const a = (Math.PI * 2 * i) / Math.max(1, vacuoles) + 1.1;
+      const dist = r * (0.18 + (i % 2) * 0.16);
+      const vx = Math.cos(a) * dist * 0.7;
+      const vy = Math.sin(a) * dist * 0.7;
+      const vr = r * (0.12 + (i % 3) * 0.03);
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba("#ffffff", alpha * 0.08);
+      ctx.strokeStyle = hexToRgba(creature.membrane || creature.color, alpha * 0.28);
+      ctx.lineWidth = 1;
+      ctx.arc(vx, vy, vr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    const layers = creature.membraneLayers || 1;
+    for (let L = 1; L < layers; L += 1) {
+      ctx.beginPath();
+      ctx.strokeStyle = hexToRgba(creature.membrane || creature.color, alpha * (0.18 + L * 0.06));
+      ctx.lineWidth = 1 + L * 0.3;
+      ctx.setLineDash(L > 1 ? [3, 4] : []);
+      ctx.arc(0, 0, r * (0.72 + L * 0.12), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    if (complexity >= 4) {
+      ctx.beginPath();
+      ctx.strokeStyle = hexToRgba(creature.coreColor || "#e8f4f2", alpha * 0.18);
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i += 1) {
+        const a0 = (Math.PI * 2 * i) / 5 + creature.pulse * 0.1;
+        const a1 = a0 + 0.9;
+        ctx.moveTo(Math.cos(a0) * r * 0.35, Math.sin(a0) * r * 0.35);
+        ctx.quadraticCurveTo(0, 0, Math.cos(a1) * r * 0.55, Math.sin(a1) * r * 0.55);
+      }
+      ctx.stroke();
+    }
+  }
+
   drawMorphBody(creature, alpha = 1, ghost = false) {
     const ctx = this.ctx;
     const r = creature.radius * (1 + Math.sin(creature.pulse) * 0.03);
     const morph = creature.morph || MORPH.COCCUS;
+    const complexity = creature.complexity || 1;
     const membrane = hexToRgba(creature.membrane || creature.color, alpha * (ghost ? 0.4 : 0.9));
     const core = hexToRgba(creature.coreColor || "#e8f4f2", alpha * (ghost ? 0.35 : 0.9));
     const bodyGrad = (x0, y0, rad) => {
@@ -230,7 +297,14 @@ export class Renderer {
         ctx.beginPath();
         ctx.ellipse(0, 0, w * 0.42, h * 0.28, 0, 0, Math.PI * 2);
         ctx.stroke();
+        if (complexity >= 2) {
+          ctx.strokeStyle = hexToRgba(creature.membrane || creature.color, 0.25);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, w * 0.34, h * 0.2, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
+      this.drawComplexityDetails(ctx, creature, r, alpha, ghost);
       this.drawFlagella(ctx, r, creature.flagella || 1, 1, alpha);
     } else if (morph === MORPH.SPIRILLUM) {
       ctx.shadowBlur = 0;
@@ -249,30 +323,69 @@ export class Renderer {
       ctx.strokeStyle = hexToRgba(creature.color, alpha * 0.9);
       ctx.lineWidth = r * 0.42;
       ctx.stroke();
+      if (complexity >= 3) {
+        ctx.strokeStyle = hexToRgba(creature.coreColor, alpha * 0.35);
+        ctx.lineWidth = r * 0.18;
+        ctx.stroke();
+      }
       this.drawFlagella(ctx, r * 0.8, creature.flagella || 1, 1, alpha);
     } else if (morph === MORPH.COLONY) {
       const cells = creature.colonyCells || 5;
+      const pts = [];
       for (let i = 0; i < cells; i += 1) {
         const a = (Math.PI * 2 * i) / cells + creature.pulse * 0.05;
         const dist = i === 0 ? 0 : r * (0.48 + (i % 3) * 0.08);
         const cx = Math.cos(a) * dist;
         const cy = Math.sin(a) * dist;
         const cr = r * (i === 0 ? 0.5 : 0.36);
+        pts.push({ cx, cy, cr });
+      }
+      if (!ghost && creature.cellBridges && pts.length > 1) {
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = hexToRgba(creature.membrane || creature.color, alpha * 0.35);
+        ctx.lineWidth = Math.max(2, r * 0.08);
+        for (let i = 1; i < pts.length; i += 1) {
+          ctx.beginPath();
+          ctx.moveTo(pts[0].cx, pts[0].cy);
+          ctx.lineTo(pts[i].cx, pts[i].cy);
+          ctx.stroke();
+        }
+        if (complexity >= 4) {
+          for (let i = 1; i < pts.length; i += 1) {
+            const j = i === pts.length - 1 ? 1 : i + 1;
+            ctx.beginPath();
+            ctx.strokeStyle = hexToRgba(creature.color, alpha * 0.2);
+            ctx.lineWidth = Math.max(1.2, r * 0.045);
+            ctx.moveTo(pts[i].cx, pts[i].cy);
+            ctx.lineTo(pts[j].cx, pts[j].cy);
+            ctx.stroke();
+          }
+        }
+      }
+      for (const p of pts) {
         ctx.beginPath();
-        ctx.fillStyle = bodyGrad(cx, cy, cr);
+        ctx.fillStyle = bodyGrad(p.cx, p.cy, p.cr);
         ctx.strokeStyle = membrane;
         ctx.lineWidth = ghost ? 1 : 1.7;
-        ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+        ctx.arc(p.cx, p.cy, p.cr, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         if (!ghost) {
           ctx.shadowBlur = 0;
           ctx.beginPath();
           ctx.fillStyle = hexToRgba(creature.coreColor, 0.4);
-          ctx.arc(cx - cr * 0.15, cy - cr * 0.12, cr * 0.22, 0, Math.PI * 2);
+          ctx.arc(p.cx - p.cr * 0.15, p.cy - p.cr * 0.12, p.cr * 0.22, 0, Math.PI * 2);
           ctx.fill();
+          if (complexity >= 3) {
+            ctx.beginPath();
+            ctx.strokeStyle = hexToRgba("#e8f4f2", 0.18);
+            ctx.arc(p.cx, p.cy, p.cr * 0.72, 0, Math.PI * 2);
+            ctx.stroke();
+          }
         }
       }
+      this.drawComplexityDetails(ctx, creature, r * 0.75, alpha, ghost);
+      if (creature.cilia) this.drawCilia(ctx, r * 1.05, alpha, 12 + complexity * 3);
     } else if (morph === MORPH.VIRUS) {
       ctx.beginPath();
       ctx.fillStyle = bodyGrad(0, 0, r * 0.9);
@@ -281,6 +394,32 @@ export class Renderer {
       ctx.arc(0, 0, r * 0.85, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      const facets = creature.capsidFacets || (complexity >= 4 ? 8 : 6);
+      if (!ghost) {
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba(creature.coreColor, 0.4);
+        ctx.lineWidth = 1.2;
+        for (let i = 0; i < facets; i += 1) {
+          const a = (Math.PI * 2 * i) / facets - Math.PI / 2;
+          const x = Math.cos(a) * r * 0.52;
+          const y = Math.sin(a) * r * 0.52;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        if (complexity >= 5) {
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba(creature.membrane || creature.color, 0.3);
+          for (let i = 0; i < facets; i += 1) {
+            const a = (Math.PI * 2 * i) / facets - Math.PI / 2;
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(a) * r * 0.52, Math.sin(a) * r * 0.52);
+          }
+          ctx.stroke();
+        }
+      }
       const spikes = creature.spikes || 10;
       for (let i = 0; i < spikes; i += 1) {
         const a = (Math.PI * 2 * i) / spikes;
@@ -299,22 +438,15 @@ export class Renderer {
         ctx.shadowBlur = ghost ? 0 : 8;
         ctx.arc(x1, y1, Math.max(2.4, r * 0.13), 0, Math.PI * 2);
         ctx.fill();
-      }
-      if (!ghost) {
-        ctx.shadowBlur = 0;
-        ctx.beginPath();
-        ctx.strokeStyle = hexToRgba(creature.coreColor, 0.4);
-        ctx.lineWidth = 1.2;
-        for (let i = 0; i < 6; i += 1) {
-          const a = (Math.PI * 2 * i) / 6;
-          const x = Math.cos(a) * r * 0.48;
-          const y = Math.sin(a) * r * 0.48;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+        if (complexity >= 4 && i % 2 === 0) {
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba(creature.coreColor, alpha * 0.45);
+          ctx.lineWidth = 1.2;
+          ctx.arc(x1, y1, Math.max(3.2, r * 0.2), 0, Math.PI * 2);
+          ctx.stroke();
         }
-        ctx.closePath();
-        ctx.stroke();
       }
+      this.drawComplexityDetails(ctx, creature, r * 0.7, alpha, ghost);
     } else if (morph === MORPH.PHAGE) {
       ctx.beginPath();
       ctx.fillStyle = bodyGrad(0, -r * 0.15, r * 0.75);
@@ -331,14 +463,37 @@ export class Renderer {
       ctx.fill();
       ctx.stroke();
       ctx.shadowBlur = 0;
+      if (complexity >= 3) {
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba(creature.coreColor, alpha * 0.35);
+        ctx.lineWidth = 1.2;
+        for (let i = 0; i < 6; i += 1) {
+          const a = (Math.PI * 2 * i) / 6 - Math.PI / 2;
+          ctx.lineTo(Math.cos(a) * r * 0.42, Math.sin(a) * r * 0.42 - r * 0.15);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
       const sheath = ctx.createLinearGradient(-r * 0.12, r * 0.3, r * 0.12, r * 1.2);
       sheath.addColorStop(0, hexToRgba(creature.color, alpha * 0.9));
       sheath.addColorStop(1, hexToRgba(creature.membrane || creature.color, alpha * 0.8));
       ctx.fillStyle = sheath;
       ctx.fillRect(-r * 0.13, r * 0.32, r * 0.26, r * 0.9);
+      if (complexity >= 4) {
+        ctx.strokeStyle = hexToRgba("#e8f4f2", alpha * 0.25);
+        ctx.lineWidth = 1;
+        for (let s = 0; s < 4; s += 1) {
+          const sy = r * (0.4 + s * 0.2);
+          ctx.beginPath();
+          ctx.moveTo(-r * 0.13, sy);
+          ctx.lineTo(r * 0.13, sy);
+          ctx.stroke();
+        }
+      }
       ctx.strokeStyle = hexToRgba(creature.color, alpha * 0.8);
       ctx.lineWidth = 1.6;
-      for (let i = -2; i <= 2; i += 1) {
+      const legs = complexity >= 4 ? 3 : 2;
+      for (let i = -legs; i <= legs; i += 1) {
         ctx.beginPath();
         ctx.moveTo(0, r * 1.18);
         ctx.quadraticCurveTo(
@@ -372,7 +527,8 @@ export class Renderer {
         ctx.ellipse(-r * 0.25, -r * 0.3, r * 0.18, r * 0.1, -0.5, 0, Math.PI * 2);
         ctx.fill();
       }
-      if (creature.cilia) this.drawCilia(ctx, r, alpha);
+      this.drawComplexityDetails(ctx, creature, r, alpha, ghost);
+      if (creature.cilia) this.drawCilia(ctx, r, alpha, 14 + complexity * 4);
     }
 
     ctx.shadowBlur = 0;
@@ -392,8 +548,8 @@ export class Renderer {
   drawGhosts(ghosts, camera, world, flow) {
     if (!ghosts?.length) return;
     const ghostCam = camOf(camera, PARALLAX.ghost);
-    const fx = (flow?.x || 0) * 0.9;
-    const fy = (flow?.y || 0) * 0.9;
+    const fx = (flow?.x || 0) * 0.28;
+    const fy = (flow?.y || 0) * 0.28;
     const ctx = this.ctx;
     for (const g of ghosts) {
       forEachWrapDraw(g.x + fx, g.y + fy, ghostCam, world, this.w, this.h, 140, (x, y) => {
@@ -685,13 +841,17 @@ export class Renderer {
     const p = level.player;
     const world = level.world;
 
-    // 背景飘动方向与玩家前进相反；加速时更明显
-    const spd = Math.hypot(p.vx, p.vy);
-    const flowGain = 0.08 + Math.min(0.12, spd * 0.0025);
-    this.counterFlow.x -= p.vx * flowGain;
-    this.counterFlow.y -= p.vy * flowGain;
-    this.counterFlow.x *= 0.965;
-    this.counterFlow.y *= 0.965;
+    // 背景轻微逆向相对运动（不宜晃动过猛）
+    this.counterFlow.x -= p.vx * 0.012;
+    this.counterFlow.y -= p.vy * 0.012;
+    this.counterFlow.x *= 0.94;
+    this.counterFlow.y *= 0.94;
+    const maxFlow = 18;
+    const fLen = Math.hypot(this.counterFlow.x, this.counterFlow.y);
+    if (fLen > maxFlow) {
+      this.counterFlow.x = (this.counterFlow.x / fLen) * maxFlow;
+      this.counterFlow.y = (this.counterFlow.y / fLen) * maxFlow;
+    }
 
     const flow = this.counterFlow;
     const deepCam = {

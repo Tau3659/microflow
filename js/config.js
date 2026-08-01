@@ -8,13 +8,16 @@ export const MORPH = {
   PHAGE: "phage",
 };
 
-/** 进化形态：原核 → 真核单细胞 → 多细胞 → 复杂多细胞 → 病毒聚合体 */
+/** 进化形态：原核 → 真核单细胞 → 多细胞 → 复杂多细胞 → 病毒聚合体
+ *  volume 随等级增大；细胞核半径 = radius * nucleusRadiusFactor（同级相对比例不变）
+ *  complexity 升高时外形结构更丰富
+ */
 export const EVOLUTIONS = [
   {
     id: 0,
     name: "原核细胞",
     morph: MORPH.BACILLUS,
-    radius: 16,
+    radius: 18,
     segmentCount: 3,
     nuclei: 1,
     color: "#3ecfb0",
@@ -23,12 +26,14 @@ export const EVOLUTIONS = [
     pointsToEvolve: 12,
     complexity: 1,
     flagella: 1,
+    organelles: 0,
+    membraneLayers: 1,
   },
   {
     id: 1,
     name: "真核单细胞",
     morph: MORPH.COCCUS,
-    radius: 24,
+    radius: 28,
     segmentCount: 5,
     nuclei: 2,
     color: "#5ec4c8",
@@ -37,12 +42,16 @@ export const EVOLUTIONS = [
     pointsToEvolve: 28,
     complexity: 2,
     flagella: 0,
+    cilia: true,
+    organelles: 2,
+    membraneLayers: 1,
+    vacuoles: 1,
   },
   {
     id: 2,
     name: "原始多细胞",
     morph: MORPH.COLONY,
-    radius: 34,
+    radius: 40,
     segmentCount: 8,
     nuclei: 3,
     color: "#e8c27a",
@@ -51,13 +60,17 @@ export const EVOLUTIONS = [
     pointsToEvolve: 48,
     complexity: 3,
     flagella: 0,
-    colonyCells: 5,
+    colonyCells: 6,
+    organelles: 3,
+    membraneLayers: 2,
+    vacuoles: 2,
+    cellBridges: true,
   },
   {
     id: 3,
     name: "复杂多细胞",
     morph: MORPH.COLONY,
-    radius: 46,
+    radius: 54,
     segmentCount: 12,
     nuclei: 4,
     color: "#7eb6ff",
@@ -66,13 +79,18 @@ export const EVOLUTIONS = [
     pointsToEvolve: 72,
     complexity: 4,
     flagella: 0,
-    colonyCells: 9,
+    colonyCells: 10,
+    organelles: 5,
+    membraneLayers: 2,
+    vacuoles: 3,
+    cellBridges: true,
+    cilia: true,
   },
   {
     id: 4,
     name: "病毒聚合体",
     morph: MORPH.VIRUS,
-    radius: 58,
+    radius: 70,
     segmentCount: 16,
     nuclei: 5,
     color: "#e07a6a",
@@ -80,7 +98,11 @@ export const EVOLUTIONS = [
     membrane: "#8a3a3a",
     pointsToEvolve: Infinity,
     complexity: 5,
-    spikes: 12,
+    spikes: 14,
+    organelles: 6,
+    membraneLayers: 3,
+    vacuoles: 2,
+    capsidFacets: 8,
   },
 ];
 
@@ -104,7 +126,7 @@ export const LAYERS = [
     boss: {
       name: "裂殖霸主",
       morph: MORPH.BACILLUS,
-      radius: 52,
+      radius: 56,
       nuclei: 3,
       color: "#c45c5c",
       membrane: "#6a2a2a",
@@ -128,7 +150,7 @@ export const LAYERS = [
     boss: {
       name: "纤毛暴君",
       morph: MORPH.COCCUS,
-      radius: 64,
+      radius: 72,
       nuclei: 4,
       color: "#b85c7a",
       membrane: "#6a2a48",
@@ -152,7 +174,7 @@ export const LAYERS = [
     boss: {
       name: "群核巨兽",
       morph: MORPH.COLONY,
-      radius: 78,
+      radius: 90,
       nuclei: 5,
       color: "#8a6ad1",
       membrane: "#3a2a6a",
@@ -176,7 +198,7 @@ export const LAYERS = [
     boss: {
       name: "噬界母体",
       morph: MORPH.PHAGE,
-      radius: 92,
+      radius: 108,
       nuclei: 6,
       color: "#e07a6a",
       membrane: "#6a2020",
@@ -222,7 +244,8 @@ export const PLAYER = {
   boostCooldown: 1.35,
   turnRate: 9,
   segmentSpacing: 11,
-  nucleusRadiusFactor: 0.22,
+  /** 核半径相对体半径比例；升级只改体半径，核随之等比放大 */
+  nucleusRadiusFactor: 0.36,
   mouthDistFactor: 0.95,
   mouthRadiusFactor: 0.32,
   eatRangeBonus: 2,
