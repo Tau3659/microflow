@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+  />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#041820" />
+  <title>菌流 · MICROFLOW</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game" aria-label="菌流游戏画布"></canvas>
+
+    <section id="title-screen" class="screen">
+      <div class="title-atmosphere" aria-hidden="true"></div>
+      <div class="title-content">
+        <p class="brand">MICROFLOW</p>
+        <h1 class="brand-cn">菌流</h1>
+        <p class="tagline">潜入微观之海，吞噬、生长、下潜</p>
+        <button id="btn-start" class="cta" type="button">开始漂流</button>
+        <p class="hint">触屏或鼠标引导方向 · 吞下更小的生命</p>
+      </div>
+    </section>
+
+    <section id="hud" class="hud hidden" aria-live="polite">
+      <div class="hud-left">
+        <span class="hud-brand">菌流</span>
+        <span id="hud-depth">表层</span>
+      </div>
+      <div class="hud-right">
+        <span id="hud-mass">质量 1</span>
+      </div>
+    </section>
+
+    <section id="pause-hint" class="pause-hint hidden">松手暂停 · 按住游动</section>
+
+    <section id="overlay" class="screen overlay hidden">
+      <div class="overlay-card">
+        <p class="overlay-brand">菌流</p>
+        <h2 id="overlay-title">被吞噬了</h2>
+        <p id="overlay-text">更大的生命吞没了你。再试一次？</p>
+        <div class="overlay-actions">
+          <button id="btn-retry" class="cta" type="button">重新开始</button>
+          <button id="btn-home" class="cta ghost" type="button">返回标题</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

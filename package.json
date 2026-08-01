@@ -1,0 +1,10 @@
+{
+  "name": "microflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "菌流 · 手机浏览器可玩的 flOw 风格细菌吞噬游戏",
+  "scripts": {
+    "start": "npx --yes serve -l 4173 .",
+    "serve": "python3 -m http.server 4173"
+  }
+}
