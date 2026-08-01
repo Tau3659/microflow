@@ -175,22 +175,25 @@ game.onStateChange = (state) => {
   }
 };
 
-btnStart.addEventListener("click", async () => {
-  await audio.unlock();
+async function beginPlay() {
+  // 先全屏再解锁：部分浏览器全屏后会挂起 AudioContext
   await enterFullscreen();
-  titleScreen.classList.add("hidden");
-  closeSettings();
+  await audio.unlock();
+  await audio.ensurePlaying();
   syncOrientation();
   game.renderer.resize();
+}
+
+btnStart.addEventListener("click", async () => {
+  titleScreen.classList.add("hidden");
+  closeSettings();
+  await beginPlay();
   game.start(0, true);
 });
 
 btnRetry.addEventListener("click", async () => {
-  await audio.unlock();
-  await enterFullscreen();
   overlay.hide();
-  syncOrientation();
-  game.renderer.resize();
+  await beginPlay();
   game.start(0, true);
 });
 

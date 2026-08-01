@@ -113,11 +113,17 @@ export class AudioManager {
 
       this._syncGains();
     }
-    if (this.ctx.state === "suspended") {
+    return this.ensurePlaying();
+  }
+
+  /** 全屏切换/回首页后 AudioContext 常被挂起，重开时必须再 resume */
+  async ensurePlaying() {
+    if (!this.ctx) return this.unlock();
+    if (this.ctx.state === "suspended" || this.ctx.state === "interrupted") {
       try {
         await this.ctx.resume();
       } catch {
-        return false;
+        // 仍尝试同步音量，下一次手势再 resume
       }
     }
     if (!this.started) {
@@ -127,7 +133,17 @@ export class AudioManager {
       this._scheduleMelodyLoop();
       this.started = true;
     }
-    return true;
+    this._threatLevel = 0;
+    this._bossThreat = 0;
+    this._syncGains();
+    // 立刻拉回 BGM，避免 setTarget 在挂起恢复后仍停在 0
+    if (this.musicGain && this.ctx) {
+      const t = this.ctx.currentTime;
+      const music = this.musicEnabled ? this.musicVolume * 0.85 : 0;
+      this.musicGain.gain.cancelScheduledValues(t);
+      this.musicGain.gain.setValueAtTime(music, t);
+    }
+    return this.ctx.state === "running";
   }
 
   _syncGains() {

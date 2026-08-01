@@ -8,7 +8,6 @@ import {
   restoreOneNucleus,
   provokeCreature,
   panicFlee,
-  isAggressive,
   willAggressPlayer,
   aliveNuclei,
   nucleusWorldPos,
@@ -99,6 +98,8 @@ export class Game {
     }
     this.transition = null;
     audio.setThreatLevel(0, 0);
+    // 重开/重试时确保 BGM 从挂起状态恢复
+    audio.ensurePlaying();
     this.level = createLevel(layerIndex, this.playerState);
     this.runStats.maxLayer = Math.max(this.runStats.maxLayer, layerIndex);
     this.ended = false;
