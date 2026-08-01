@@ -237,6 +237,7 @@ body:-webkit-full-screen {
 #hud-form,
 #hud-points,
 #hud-nuclei,
+#hud-protein-left,
 #hud-evolve {
   font-size: 0.88rem;
   color: var(--text);
@@ -245,6 +246,15 @@ body:-webkit-full-screen {
 
 #hud-nuclei {
   color: var(--accent);
+}
+
+#hud-protein-left {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+#hud-protein-left.exhausted {
+  color: var(--accent-warm);
 }
 
 #hud-form {

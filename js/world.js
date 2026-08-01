@@ -80,7 +80,6 @@ function createGhostLayer(layerIndex) {
       createGhost(rand(80, WORLD.width - 80), rand(80, WORLD.height - 80), next)
     );
   }
-  // 隐约的下一层 Boss 剪影
   ghosts.push({
     ...createGhost(WORLD.width * 0.72, WORLD.height * 0.3, next),
     radius: next.boss.radius * 0.85,
@@ -98,7 +97,9 @@ export function createLevel(layerIndex, playerState) {
   player.x = spawn.x;
   player.y = spawn.y;
 
-  const proteins = Array.from({ length: layer.proteinCount }, () => createProtein(layer));
+  // 本层蛋白质总量有限，不会无限刷新
+  const proteinBudget = layer.proteinCount;
+  const proteins = Array.from({ length: proteinBudget }, () => createProtein(layer));
   const dnas = Array.from({ length: layer.dnaCount }, () => createDna(layer));
 
   const creatures = [];
@@ -131,6 +132,9 @@ export function createLevel(layerIndex, playerState) {
     points: playerState.points,
     evolvedThisLayer: playerState.evolvedThisLayer ?? false,
     bossDefeated: false,
+    proteinBudget,
+    proteinConsumed: 0,
+    proteinsExhausted: false,
   };
 }
 
@@ -162,29 +166,42 @@ export function spawnFloatText(level, x, y, text, color) {
   });
 }
 
-/** 被吃掉时分解：释放蛋白质与 DNA */
+/** 被吃掉时分解：一次性释放体内储存的蛋白质 + 少量 DNA */
 export function decomposeCreature(level, creature) {
   const layer = level.layer;
-  for (let i = 0; i < creature.dropProtein; i += 1) {
+  const release = Math.max(0, creature.storedProtein || 0);
+  for (let i = 0; i < release; i += 1) {
     level.proteins.push(
-      createProtein(layer, creature.x + rand(-40, 40), creature.y + rand(-40, 40))
+      createProtein(layer, creature.x + rand(-48, 48), creature.y + rand(-48, 48))
     );
   }
-  for (let i = 0; i < creature.dropDna; i += 1) {
+  creature.storedProtein = 0;
+
+  for (let i = 0; i < (creature.dropDna || 0); i += 1) {
     level.dnas.push(
       createDna(layer, creature.x + rand(-30, 30), creature.y + rand(-30, 30))
     );
   }
   spawnBurst(level, creature.x, creature.y, creature.color, 18);
-  spawnFloatText(level, creature.x, creature.y - 20, "分解", creature.color);
+  if (release > 0) {
+    spawnFloatText(level, creature.x, creature.y - 20, `释放 ${release}`, layer.protein);
+  } else {
+    spawnFloatText(level, creature.x, creature.y - 20, "分解", creature.color);
+  }
+}
+
+/** 场上仍流通的蛋白质：漂浮 + 生物体内储存 */
+export function ecosystemProtein(level) {
+  let stored = 0;
+  for (const c of level.creatures) stored += c.storedProtein || 0;
+  return level.proteins.length + stored;
 }
 
 export function maintainPickups(level) {
-  const { layer, proteins, dnas } = level;
-  while (proteins.length < Math.floor(layer.proteinCount * 0.55)) {
-    proteins.push(createProtein(layer));
-  }
-  while (dnas.length < Math.floor(layer.dnaCount * 0.45)) {
+  // 蛋白质总量有限，不自动补充；仅维持少量 DNA 线索
+  const { layer, dnas } = level;
+  const minDna = Math.max(2, Math.floor(layer.dnaCount * 0.35));
+  while (dnas.length < minDna) {
     dnas.push(createDna(layer));
   }
 }

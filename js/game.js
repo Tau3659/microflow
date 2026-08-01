@@ -4,10 +4,12 @@ import {
   updateEnemy,
   updateGhost,
   applyEvolution,
+  restoreOneNucleus,
   aliveNuclei,
   nucleusWorldPos,
   mouthWorldPos,
   mouthTouchesNucleus,
+  mouthTouchesPoint,
   wrapEntity,
   wrappedOffset,
 } from "./creature.js";
@@ -17,6 +19,7 @@ import {
   spawnFloatText,
   decomposeCreature,
   maintainPickups,
+  ecosystemProtein,
 } from "./world.js";
 import { Renderer } from "./renderer.js";
 import { Input } from "./input.js";
@@ -100,8 +103,9 @@ export class Game {
   }
 
   _portalOpen() {
-    // 进化后可前往上一层生物圈
-    return this.level.evolvedThisLayer && this.level.layerIndex < LAYERS.length - 1;
+    if (this.level.layerIndex >= LAYERS.length - 1) return false;
+    // 进化后，或本层蛋白质吃光后，必须进入下一层
+    return this.level.evolvedThisLayer || this.level.proteinsExhausted;
   }
 
   _updateHud() {
@@ -109,6 +113,7 @@ export class Game {
     const evo = EVOLUTIONS[player.evolutionId];
     const need = evo.pointsToEvolve;
     const nucleiAlive = aliveNuclei(player).length;
+    const missing = player.nuclei.length - nucleiAlive;
     this.hud.setInfo({
       layer: this.level.layer.name,
       form: evo.name,
@@ -116,6 +121,12 @@ export class Game {
       need: need === Infinity ? "MAX" : need,
       nuclei: nucleiAlive,
       nucleiMax: player.nuclei.length,
+      proteinLeft: ecosystemProtein(this.level),
+      proteinBudget: this.level.proteinBudget,
+      recoverProgress: player.recoverProgress || 0,
+      recoverNeed: PLAYER.proteinPerNucleus,
+      recovering: missing > 0,
+      exhausted: this.level.proteinsExhausted,
       canEvolve: this._canEvolve(),
       boostReady: player.boostCooldown <= 0 && player.boostTimer <= 0,
       boosting: player.boostTimer > 0,
@@ -143,13 +154,15 @@ export class Game {
     this.camera.y += wrap.wy;
 
     for (const c of level.creatures) {
-      updateEnemy(c, player, dt, level.world);
+      updateEnemy(c, player, dt, level.world, level.proteins);
     }
     for (const g of level.ghosts || []) {
       updateGhost(g, dt, level.world);
     }
 
     this._collectPickups();
+    this._npcEatProteins();
+    this._checkProteinExhausted();
     this._resolveNucleusCombat();
     this._updateVfx(dt);
     this._updatePortal(dt);
@@ -175,16 +188,37 @@ export class Game {
     const level = this.level;
     const player = level.player;
     const world = level.world;
+    const mouth = mouthWorldPos(player);
+    const missing = player.nuclei.length - aliveNuclei(player).length;
 
     for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
       const p = level.proteins[i];
       p.phase += 0.05;
-      const d = wrappedOffset(player.x, player.y, p.x, p.y, world).dist;
-      if (d < player.radius + p.r) {
+      if (!mouthTouchesPoint(mouth, p.x, p.y, p.r, world, 1)) continue;
+
+      level.proteins.splice(i, 1);
+      level.proteinConsumed += p.value;
+      spawnBurst(level, p.x, p.y, p.color, 4);
+
+      if (missing > 0) {
+        player.recoverProgress = (player.recoverProgress || 0) + p.value;
+        spawnFloatText(
+          level,
+          p.x,
+          p.y,
+          `修复 ${player.recoverProgress}/${PLAYER.proteinPerNucleus}`,
+          p.color
+        );
+        if (player.recoverProgress >= PLAYER.proteinPerNucleus) {
+          player.recoverProgress -= PLAYER.proteinPerNucleus;
+          if (restoreOneNucleus(player)) {
+            spawnFloatText(level, player.x, player.y - 28, "细胞核恢复", "#9be8d6");
+            spawnBurst(level, player.x, player.y, player.coreColor, 12);
+          }
+        }
+      } else {
         level.points += p.value;
-        spawnBurst(level, p.x, p.y, p.color, 4);
         spawnFloatText(level, p.x, p.y, "+1", p.color);
-        level.proteins.splice(i, 1);
       }
     }
 
@@ -193,12 +227,43 @@ export class Game {
       const d = level.dnas[i];
       d.phase += 0.04;
       if (!canEvolve) continue;
-      const dist = wrappedOffset(player.x, player.y, d.x, d.y, world).dist;
-      if (dist < player.radius + d.r) {
-        level.dnas.splice(i, 1);
-        this._evolve();
-        break;
+      if (!mouthTouchesPoint(mouth, d.x, d.y, d.r, world, 2)) continue;
+      level.dnas.splice(i, 1);
+      this._evolve();
+      break;
+    }
+  }
+
+  _npcEatProteins() {
+    const level = this.level;
+    const world = level.world;
+    for (const c of level.creatures) {
+      if (!c.alive) continue;
+      const mouth = mouthWorldPos(c);
+      for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
+        const p = level.proteins[i];
+        if (!mouthTouchesPoint(mouth, p.x, p.y, p.r, world, 1)) continue;
+        c.storedProtein = (c.storedProtein || 0) + p.value;
+        spawnBurst(level, p.x, p.y, p.color, 3);
+        level.proteins.splice(i, 1);
       }
+    }
+  }
+
+  _checkProteinExhausted() {
+    const level = this.level;
+    if (level.proteinsExhausted) return;
+    if (ecosystemProtein(level) > 0) return;
+    level.proteinsExhausted = true;
+    if (level.layerIndex < LAYERS.length - 1) {
+      spawnFloatText(
+        level,
+        level.player.x,
+        level.player.y - 36,
+        "本层蛋白质已尽 · 前往下一层",
+        level.layer.accent
+      );
+      if (level.portal) level.portal.open = true;
     }
   }
 

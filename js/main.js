@@ -16,6 +16,7 @@ const hudLayer = document.getElementById("hud-layer");
 const hudForm = document.getElementById("hud-form");
 const hudPoints = document.getElementById("hud-points");
 const hudNuclei = document.getElementById("hud-nuclei");
+const hudProteinLeft = document.getElementById("hud-protein-left");
 const hudEvolve = document.getElementById("hud-evolve");
 const boostBtn = document.getElementById("btn-boost");
 const rotateHint = document.getElementById("rotate-hint");
@@ -34,6 +35,12 @@ const hud = {
     need,
     nuclei,
     nucleiMax,
+    proteinLeft,
+    proteinBudget,
+    recoverProgress,
+    recoverNeed,
+    recovering,
+    exhausted,
     canEvolve,
     boostReady,
     boosting,
@@ -41,11 +48,23 @@ const hud = {
     hudLayer.textContent = layer;
     hudForm.textContent = form;
     hudNuclei.textContent = `细胞核 ${nuclei} / ${nucleiMax}`;
-    hudPoints.textContent = `蛋白质 ${points}${need === "MAX" ? "" : ` / ${need}`}`;
-    hudEvolve.classList.toggle("ready", !!canEvolve);
+    hudProteinLeft.textContent = exhausted
+      ? "本层蛋白已尽"
+      : `本层蛋白 ${proteinLeft} / ${proteinBudget}`;
+    hudProteinLeft.classList.toggle("exhausted", !!exhausted);
+    if (recovering) {
+      hudPoints.textContent = `修复核 ${recoverProgress}/${recoverNeed}`;
+    } else {
+      hudPoints.textContent = `进化点 ${points}${need === "MAX" ? "" : ` / ${need}`}`;
+    }
+    hudEvolve.classList.toggle("ready", !!canEvolve || !!exhausted);
     hudEvolve.classList.toggle("boosting", !!boosting);
     if (boosting) {
       hudEvolve.textContent = "加速中";
+    } else if (exhausted) {
+      hudEvolve.textContent = "进入下一层";
+    } else if (recovering) {
+      hudEvolve.textContent = "吞噬蛋白质修复";
     } else if (canEvolve) {
       hudEvolve.textContent = "寻找 DNA 进化";
     } else if (need === "MAX") {

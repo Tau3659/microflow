@@ -200,11 +200,13 @@ export const PLAYER = {
   boostCooldown: 1.35,
   turnRate: 9,
   segmentSpacing: 11,
-  nucleusRadiusFactor: 0.3,
+  nucleusRadiusFactor: 0.28,
   mouthDistFactor: 0.95,
   mouthRadiusFactor: 0.32,
   eatRangeBonus: 2,
   nucleusHurtCooldown: 0.9,
+  /** 缺失细胞核时，吞噬这么多蛋白质可恢复 1 个核 */
+  proteinPerNucleus: 7,
 };
 
 /** Boss 领地 */

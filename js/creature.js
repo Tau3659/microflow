@@ -52,22 +52,109 @@ export function wrappedOffset(fromX, fromY, toX, toY, world) {
   return { dx, dy, dist: Math.hypot(dx, dy) };
 }
 
-function makeNuclei(count, radius) {
-  if (count <= 1) {
-    return [{ ox: 0, oy: 0, alive: true, r: radius * PLAYER.nucleusRadiusFactor }];
-  }
+function makeNuclei(count, radius, morph = MORPH.COCCUS) {
+  const baseR = radius * PLAYER.nucleusRadiusFactor * (count > 2 ? 0.78 : 0.9);
   const nuclei = [];
-  for (let i = 0; i < count; i += 1) {
-    const a = (Math.PI * 2 * i) / count - Math.PI / 2;
-    const dist = radius * (0.38 + (i % 2) * 0.08);
+
+  if (count <= 1) {
+    // 单核也不贴中心，略偏置
+    const a = Math.random() * Math.PI * 2;
+    const dist = radius * (0.22 + Math.random() * 0.28);
     nuclei.push({
       ox: Math.cos(a) * dist,
       oy: Math.sin(a) * dist,
       alive: true,
-      r: radius * PLAYER.nucleusRadiusFactor * 0.85,
+      r: baseR,
+    });
+    return nuclei;
+  }
+
+  if (morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM) {
+    for (let i = 0; i < count; i += 1) {
+      const t = count === 1 ? 0.5 : i / (count - 1);
+      nuclei.push({
+        ox: (t - 0.5) * radius * 1.7,
+        oy: (Math.random() - 0.5) * radius * 0.45,
+        alive: true,
+        r: baseR,
+      });
+    }
+    return nuclei;
+  }
+
+  if (morph === MORPH.COLONY) {
+    for (let i = 0; i < count; i += 1) {
+      const a = (Math.PI * 2 * i) / count + 0.4;
+      const dist = radius * (0.42 + (i % 2) * 0.18);
+      nuclei.push({
+        ox: Math.cos(a) * dist,
+        oy: Math.sin(a) * dist,
+        alive: true,
+        r: baseR,
+      });
+    }
+    return nuclei;
+  }
+
+  if (morph === MORPH.VIRUS || morph === MORPH.PHAGE) {
+    for (let i = 0; i < count; i += 1) {
+      const a = (Math.PI * 2 * i) / count - Math.PI / 3;
+      const dist = radius * (0.5 + (i % 3) * 0.1);
+      nuclei.push({
+        ox: Math.cos(a) * dist,
+        oy: Math.sin(a) * dist * (morph === MORPH.PHAGE ? 0.75 : 1) - (morph === MORPH.PHAGE ? radius * 0.1 : 0),
+        alive: true,
+        r: baseR,
+      });
+    }
+    return nuclei;
+  }
+
+  // 球菌等：散布在外圈，带抖动
+  for (let i = 0; i < count; i += 1) {
+    const a = (Math.PI * 2 * i) / count + Math.random() * 0.35;
+    const dist = radius * (0.48 + Math.random() * 0.28);
+    nuclei.push({
+      ox: Math.cos(a) * dist,
+      oy: Math.sin(a) * dist,
+      alive: true,
+      r: baseR,
     });
   }
   return nuclei;
+}
+
+/** 嘴可在侧面/斜前方，不一定正前方 */
+function makeMouthConfig(morph, radius) {
+  let angle = 0;
+  let dist = PLAYER.mouthDistFactor;
+  if (morph === MORPH.BACILLUS) {
+    angle = (Math.random() < 0.55 ? 0 : (Math.random() < 0.5 ? 0.55 : -0.55));
+    dist = 1.02 + Math.random() * 0.12;
+  } else if (morph === MORPH.SPIRILLUM) {
+    angle = (Math.random() - 0.5) * 1.2;
+    dist = 0.95 + Math.random() * 0.2;
+  } else if (morph === MORPH.COCCUS) {
+    angle = (Math.random() - 0.5) * Math.PI * 0.9;
+    dist = 0.88 + Math.random() * 0.2;
+  } else if (morph === MORPH.COLONY) {
+    angle = (Math.random() - 0.5) * Math.PI;
+    dist = 0.9 + Math.random() * 0.25;
+  } else if (morph === MORPH.VIRUS) {
+    angle = (Math.random() - 0.5) * 1.4;
+    dist = 1.05 + Math.random() * 0.15;
+  } else if (morph === MORPH.PHAGE) {
+    angle = 0;
+    dist = 0.55;
+  } else {
+    angle = (Math.random() - 0.5) * 1.2;
+    dist = 0.9 + Math.random() * 0.2;
+  }
+  return {
+    mouthAngle: angle,
+    mouthDist: dist,
+    mouthRadius: Math.max(4, radius * PLAYER.mouthRadiusFactor),
+  };
 }
 
 function pick(arr) {
@@ -93,6 +180,7 @@ export function createPlayer(x, y, evolutionId = 0) {
   for (let i = 0; i < evo.segmentCount; i += 1) {
     segments.push({ x: x - i * PLAYER.segmentSpacing * 0.5, y });
   }
+  const mouth = makeMouthConfig(evo.morph, evo.radius);
   return {
     id: nextId++,
     kind: "player",
@@ -104,12 +192,15 @@ export function createPlayer(x, y, evolutionId = 0) {
     evolutionId,
     radius: evo.radius,
     ...visualFromEvo(evo),
+    ...mouth,
     segments,
-    nuclei: makeNuclei(evo.nuclei, evo.radius),
+    nuclei: makeNuclei(evo.nuclei, evo.radius, evo.morph),
     pulse: 0,
     boostTimer: 0,
     boostCooldown: 0,
     invuln: 0,
+    recoverProgress: 0,
+    storedProtein: 0,
     alive: true,
   };
 }
@@ -119,13 +210,23 @@ export function applyEvolution(player, evolutionId) {
   player.evolutionId = evolutionId;
   player.radius = evo.radius;
   Object.assign(player, visualFromEvo(evo));
-  player.nuclei = makeNuclei(evo.nuclei, evo.radius);
+  Object.assign(player, makeMouthConfig(evo.morph, evo.radius));
+  player.nuclei = makeNuclei(evo.nuclei, evo.radius, evo.morph);
+  player.recoverProgress = 0;
   while (player.segments.length < evo.segmentCount) {
     const last = player.segments[player.segments.length - 1];
     player.segments.push({ x: last.x, y: last.y });
   }
   while (player.segments.length > evo.segmentCount) player.segments.pop();
   player.invuln = 1.2;
+}
+
+export function restoreOneNucleus(player) {
+  const dead = player.nuclei.find((n) => !n.alive);
+  if (!dead) return false;
+  dead.alive = true;
+  player.invuln = Math.max(player.invuln, 0.45);
+  return true;
 }
 
 export function createNormal(x, y, layer, evolutionFloor = 0) {
@@ -156,19 +257,21 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     colonyCells: morph === MORPH.COLONY ? 4 + Math.floor(Math.random() * 4) : 0,
     cilia: morph === MORPH.COCCUS && Math.random() < 0.35,
     segments,
-    nuclei: makeNuclei(1, radius),
+    nuclei: makeNuclei(1, radius, morph),
+    ...makeMouthConfig(morph, radius),
     pulse: Math.random() * 10,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
     aggro: 0.35 + Math.random() * 0.35,
     alive: true,
-    dropProtein: 2 + Math.floor(Math.random() * 3),
+    storedProtein: 0,
     dropDna: Math.random() < 0.45 ? 1 : 0,
   };
 }
 
 export function createBoss(x, y, layer) {
   const b = layer.boss;
+  const morph = b.morph || MORPH.BACILLUS;
   const segments = [];
   for (let i = 0; i < 14; i += 1) {
     segments.push({ x: x - i * 12, y });
@@ -187,7 +290,7 @@ export function createBoss(x, y, layer) {
     vy: 0,
     angle: 0,
     radius: b.radius,
-    morph: b.morph || MORPH.BACILLUS,
+    morph,
     color: b.color,
     coreColor: "#ffe0dc",
     membrane: b.membrane || "#4a2020",
@@ -196,13 +299,14 @@ export function createBoss(x, y, layer) {
     colonyCells: b.colonyCells || 0,
     cilia: !!b.cilia,
     segments,
-    nuclei: makeNuclei(b.nuclei, b.radius),
+    nuclei: makeNuclei(b.nuclei, b.radius, morph),
+    ...makeMouthConfig(morph, b.radius),
     pulse: 0,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
     aggro: 1,
     alive: true,
-    dropProtein: 10 + b.nuclei * 2,
+    storedProtein: 0,
     dropDna: 2 + Math.floor(b.nuclei / 2),
   };
 }
@@ -262,22 +366,27 @@ export function nucleusWorldPos(creature, nucleus) {
   };
 }
 
-/** 嘴：朝向正前方，只有嘴碰到细胞核才能吞噬 */
+/** 嘴：相对朝向可偏转，只有嘴碰到细胞核才能吞噬 */
 export function mouthWorldPos(creature) {
-  const dist = creature.radius * PLAYER.mouthDistFactor;
-  const r = Math.max(4, creature.radius * PLAYER.mouthRadiusFactor);
-  // 噬菌体嘴在头部前端略偏前
-  const extra = creature.morph === "phage" ? creature.radius * 0.15 : 0;
+  const facing = creature.angle + (creature.mouthAngle || 0);
+  const dist = creature.radius * (creature.mouthDist || PLAYER.mouthDistFactor);
+  const r = creature.mouthRadius || Math.max(4, creature.radius * PLAYER.mouthRadiusFactor);
   return {
-    x: creature.x + Math.cos(creature.angle) * (dist + extra),
-    y: creature.y + Math.sin(creature.angle) * (dist + extra),
+    x: creature.x + Math.cos(facing) * dist,
+    y: creature.y + Math.sin(facing) * dist,
     r,
+    facing,
   };
 }
 
 export function mouthTouchesNucleus(mouth, nucleusPos, world, bonus = 0) {
   const off = wrappedOffset(mouth.x, mouth.y, nucleusPos.x, nucleusPos.y, world);
   return off.dist < mouth.r + nucleusPos.r + bonus;
+}
+
+export function mouthTouchesPoint(mouth, x, y, radius, world, bonus = 0) {
+  const off = wrappedOffset(mouth.x, mouth.y, x, y, world);
+  return off.dist < mouth.r + radius + bonus;
 }
 
 export function updatePlayer(player, input, dt) {
@@ -332,7 +441,7 @@ function steerCreature(creature, tx, ty, dt, speedMul = 1) {
   syncSegments(creature);
 }
 
-function updateBoss(creature, player, dt, world) {
+function updateBoss(creature, player, dt, world, proteins = []) {
   const toPlayer = wrappedOffset(creature.x, creature.y, player.x, player.y, world);
   const toHome = wrappedOffset(creature.x, creature.y, creature.homeX, creature.homeY, world);
   const playerToHome = wrappedOffset(
@@ -371,34 +480,51 @@ function updateBoss(creature, player, dt, world) {
     ty = toHome.dy;
     speedMul = BOSS_AI.returnSpeed;
   } else {
-    // 领地内巡逻，不离开家太远
-    creature.wanderTimer -= dt;
-    if (creature.wanderTimer <= 0) {
-      creature.wanderTimer = 0.8 + Math.random() * 1.4;
-      const a = Math.random() * Math.PI * 2;
-      const dist = creature.territoryRadius * (0.25 + Math.random() * 0.45);
-      creature.patrolTargetX = creature.homeX + Math.cos(a) * dist;
-      creature.patrolTargetY = creature.homeY + Math.sin(a) * dist;
+    // 领地内巡逻 / 觅食
+    let nearest = null;
+    let nearestDist = 220;
+    for (const p of proteins) {
+      const off = wrappedOffset(creature.x, creature.y, p.x, p.y, world);
+      const fromHome = wrappedOffset(creature.homeX, creature.homeY, p.x, p.y, world);
+      if (fromHome.dist > creature.territoryRadius) continue;
+      if (off.dist < nearestDist) {
+        nearestDist = off.dist;
+        nearest = off;
+      }
     }
-    const toPatrol = wrappedOffset(
-      creature.x,
-      creature.y,
-      creature.patrolTargetX ?? creature.homeX,
-      creature.patrolTargetY ?? creature.homeY,
-      world
-    );
-    tx = toPatrol.dx;
-    ty = toPatrol.dy;
-    speedMul = 0.72;
+    if (nearest) {
+      tx = nearest.dx;
+      ty = nearest.dy;
+      speedMul = 0.85;
+    } else {
+      creature.wanderTimer -= dt;
+      if (creature.wanderTimer <= 0) {
+        creature.wanderTimer = 0.8 + Math.random() * 1.4;
+        const a = Math.random() * Math.PI * 2;
+        const dist = creature.territoryRadius * (0.25 + Math.random() * 0.45);
+        creature.patrolTargetX = creature.homeX + Math.cos(a) * dist;
+        creature.patrolTargetY = creature.homeY + Math.sin(a) * dist;
+      }
+      const toPatrol = wrappedOffset(
+        creature.x,
+        creature.y,
+        creature.patrolTargetX ?? creature.homeX,
+        creature.patrolTargetY ?? creature.homeY,
+        world
+      );
+      tx = toPatrol.dx;
+      ty = toPatrol.dy;
+      speedMul = 0.72;
+    }
   }
 
   steerCreature(creature, tx, ty, dt, speedMul);
   wrapEntity(creature, world);
 }
 
-export function updateEnemy(creature, player, dt, world) {
+export function updateEnemy(creature, player, dt, world, proteins = []) {
   if (creature.kind === "boss") {
-    updateBoss(creature, player, dt, world);
+    updateBoss(creature, player, dt, world, proteins);
     return;
   }
 
@@ -422,6 +548,21 @@ export function updateEnemy(creature, player, dt, world) {
     } else {
       tx = n.x * creature.aggro + tx * 0.25;
       ty = n.y * creature.aggro + ty * 0.25;
+    }
+  } else {
+    // 空闲时觅食附近蛋白质
+    let nearest = null;
+    let nearestDist = 260;
+    for (const p of proteins) {
+      const off = wrappedOffset(creature.x, creature.y, p.x, p.y, world);
+      if (off.dist < nearestDist) {
+        nearestDist = off.dist;
+        nearest = off;
+      }
+    }
+    if (nearest) {
+      tx = nearest.dx * 1.1 + tx * 0.25;
+      ty = nearest.dy * 1.1 + ty * 0.25;
     }
   }
 
