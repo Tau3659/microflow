@@ -6,6 +6,8 @@ import {
   applyEvolution,
   aliveNuclei,
   nucleusWorldPos,
+  mouthWorldPos,
+  mouthTouchesNucleus,
   wrapEntity,
   wrappedOffset,
 } from "./creature.js";
@@ -225,30 +227,26 @@ export class Game {
     const world = level.world;
     if (!player.alive) return;
 
-    const playerCores = aliveNuclei(player);
-    if (playerCores.length === 0) {
+    if (aliveNuclei(player).length === 0) {
       player.alive = false;
       this._end("细胞核被吃光", "所有细胞核均被吞噬，生命终止。");
       return;
     }
 
+    const playerMouth = mouthWorldPos(player);
+
     for (let i = level.creatures.length - 1; i >= 0; i -= 1) {
       const enemy = level.creatures[i];
       if (!enemy.alive) continue;
 
-      // 玩家任一细胞核可吞噬敌方核
-      for (const pn of playerCores) {
-        const pN = nucleusWorldPos(player, pn);
-        for (const n of enemy.nuclei) {
-          if (!n.alive) continue;
-          const eN = nucleusWorldPos(enemy, n);
-          const off = wrappedOffset(pN.x, pN.y, eN.x, eN.y, world);
-          const eatRange = pN.r + eN.r + PLAYER.eatRangeBonus;
-          if (off.dist < eatRange && player.radius + 8 >= enemy.radius * 0.55) {
-            n.alive = false;
-            spawnBurst(level, eN.x, eN.y, enemy.coreColor, 8);
-            spawnFloatText(level, eN.x, eN.y, "核破", enemy.coreColor);
-          }
+      // 只有玩家的嘴碰到敌方细胞核，才算吃掉
+      for (const n of enemy.nuclei) {
+        if (!n.alive) continue;
+        const eN = nucleusWorldPos(enemy, n);
+        if (mouthTouchesNucleus(playerMouth, eN, world, PLAYER.eatRangeBonus)) {
+          n.alive = false;
+          spawnBurst(level, eN.x, eN.y, enemy.coreColor, 8);
+          spawnFloatText(level, eN.x, eN.y, "吞核", enemy.coreColor);
         }
       }
 
@@ -266,27 +264,19 @@ export class Game {
         continue;
       }
 
-      // 敌方吞掉玩家一个核；全部吃光才结束
+      // 只有敌方的嘴碰到玩家细胞核，才算吃掉
       if (player.invuln > 0) continue;
-      const threat =
-        enemy.kind === "boss" || enemy.radius >= player.radius * 0.85;
-      if (!threat) continue;
-
+      const enemyMouth = mouthWorldPos(enemy);
       let hit = false;
-      for (const n of enemy.nuclei) {
-        if (!n.alive || hit) continue;
-        const eN = nucleusWorldPos(enemy, n);
-        for (const pn of aliveNuclei(player)) {
-          const pN = nucleusWorldPos(player, pn);
-          const off = wrappedOffset(eN.x, eN.y, pN.x, pN.y, world);
-          if (off.dist < eN.r + pN.r + 2) {
-            pn.alive = false;
-            player.invuln = PLAYER.nucleusHurtCooldown;
-            spawnBurst(level, pN.x, pN.y, player.coreColor, 14);
-            spawnFloatText(level, pN.x, pN.y, "核损", "#e07a6a");
-            hit = true;
-            break;
-          }
+      for (const pn of aliveNuclei(player)) {
+        if (hit) break;
+        const pN = nucleusWorldPos(player, pn);
+        if (mouthTouchesNucleus(enemyMouth, pN, world, PLAYER.eatRangeBonus)) {
+          pn.alive = false;
+          player.invuln = PLAYER.nucleusHurtCooldown;
+          spawnBurst(level, pN.x, pN.y, player.coreColor, 14);
+          spawnFloatText(level, pN.x, pN.y, "核损", "#e07a6a");
+          hit = true;
         }
       }
 
@@ -295,8 +285,8 @@ export class Game {
         this._end(
           "细胞核被吃光",
           enemy.kind === "boss"
-            ? `${enemy.name} 吃光了你的细胞核。`
-            : "敌方生物吃光了你的细胞核。"
+            ? `${enemy.name} 用嘴吃光了你的细胞核。`
+            : "敌方生物用嘴吃光了你的细胞核。"
         );
         return;
       }

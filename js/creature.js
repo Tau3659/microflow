@@ -262,6 +262,24 @@ export function nucleusWorldPos(creature, nucleus) {
   };
 }
 
+/** 嘴：朝向正前方，只有嘴碰到细胞核才能吞噬 */
+export function mouthWorldPos(creature) {
+  const dist = creature.radius * PLAYER.mouthDistFactor;
+  const r = Math.max(4, creature.radius * PLAYER.mouthRadiusFactor);
+  // 噬菌体嘴在头部前端略偏前
+  const extra = creature.morph === "phage" ? creature.radius * 0.15 : 0;
+  return {
+    x: creature.x + Math.cos(creature.angle) * (dist + extra),
+    y: creature.y + Math.sin(creature.angle) * (dist + extra),
+    r,
+  };
+}
+
+export function mouthTouchesNucleus(mouth, nucleusPos, world, bonus = 0) {
+  const off = wrappedOffset(mouth.x, mouth.y, nucleusPos.x, nucleusPos.y, world);
+  return off.dist < mouth.r + nucleusPos.r + bonus;
+}
+
 export function updatePlayer(player, input, dt) {
   if (player.boostCooldown > 0) player.boostCooldown -= dt;
   if (player.boostTimer > 0) player.boostTimer -= dt;

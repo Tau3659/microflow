@@ -1,5 +1,5 @@
 import { EVOLUTIONS, MORPH, PARALLAX } from "./config.js";
-import { aliveNuclei, nucleusWorldPos } from "./creature.js";
+import { aliveNuclei, mouthWorldPos, nucleusWorldPos } from "./creature.js";
 
 function hexToRgba(hex, alpha) {
   const h = hex.replace("#", "");
@@ -470,6 +470,32 @@ export class Renderer {
           ctx.stroke();
         }
         this.drawMorphBody(creature, creature.kind === "player" ? 1 : 0.92, false);
+        ctx.restore();
+
+        // 嘴：朝向正前方的开口（吞噬判定点）
+        const mouth = mouthWorldPos(creature);
+        const mx = mouth.x + ox - camera.x;
+        const my = mouth.y + oy - camera.y;
+        ctx.save();
+        ctx.translate(mx, my);
+        ctx.rotate(creature.angle);
+        const open = 0.75 + Math.sin(creature.pulse * 2.2) * 0.2;
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba("#031016", creature.kind === "player" ? 0.78 : 0.7);
+        ctx.strokeStyle = hexToRgba(
+          creature.kind === "player" ? "#e8c27a" : creature.color,
+          creature.kind === "player" ? 0.85 : 0.55
+        );
+        ctx.lineWidth = 1.6;
+        ctx.ellipse(0, 0, mouth.r * open, mouth.r * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // 上下唇示意
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba("#e8f4f2", 0.35);
+        ctx.lineWidth = 1;
+        ctx.arc(mouth.r * 0.1, 0, mouth.r * 0.55, -0.9, 0.9);
+        ctx.stroke();
         ctx.restore();
 
         for (const n of creature.nuclei || []) {

@@ -201,7 +201,9 @@ export const PLAYER = {
   turnRate: 9,
   segmentSpacing: 11,
   nucleusRadiusFactor: 0.3,
-  eatRangeBonus: 4,
+  mouthDistFactor: 0.95,
+  mouthRadiusFactor: 0.32,
+  eatRangeBonus: 2,
   nucleusHurtCooldown: 0.9,
 };
 
