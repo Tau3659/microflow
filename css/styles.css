@@ -188,10 +188,15 @@ body {
 #hud-layer,
 #hud-form,
 #hud-points,
+#hud-nuclei,
 #hud-evolve {
   font-size: 0.88rem;
   color: var(--text);
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+}
+
+#hud-nuclei {
+  color: var(--accent);
 }
 
 #hud-form {
@@ -388,13 +393,128 @@ body {
   to { opacity: 1; }
 }
 
-@media (min-width: 768px) {
+/* 横屏优先布局 */
+@media (orientation: landscape) {
+  .landscape-title {
+    max-width: 34rem;
+  }
+
+  .brand {
+    font-size: clamp(2.2rem, 8vw, 3.6rem);
+  }
+
   .virtual-pad {
-    width: 148px;
-    height: 148px;
+    width: 118px;
+    height: 118px;
+  }
+
+  .boost-btn {
+    width: 78px;
+    height: 78px;
+    margin-bottom: 8px;
+  }
+
+  .controls {
+    padding-bottom: calc(10px + var(--safe-bottom));
+  }
+}
+
+@media (orientation: landscape) and (min-height: 420px) {
+  .virtual-pad {
+    width: 132px;
+    height: 132px;
   }
   .boost-btn {
-    width: 96px;
-    height: 96px;
+    width: 86px;
+    height: 86px;
+  }
+}
+
+/* 竖屏：提示旋转 */
+.rotate-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 30%, rgba(62, 207, 176, 0.16), transparent 55%),
+    linear-gradient(180deg, var(--bg-shallow), var(--bg-abyss));
+}
+
+.rotate-hint[hidden] {
+  display: none !important;
+}
+
+.rotate-card {
+  text-align: center;
+  max-width: 18rem;
+  animation: rise-in 0.5s ease both;
+}
+
+.rotate-brand {
+  margin: 0;
+  letter-spacing: 0.35em;
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.rotate-title {
+  margin: 0.8rem 0 0;
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.rotate-text {
+  margin: 0.6rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.rotate-icon {
+  width: 64px;
+  height: 40px;
+  margin: 1.4rem auto 0;
+  border: 2px solid rgba(62, 207, 176, 0.55);
+  border-radius: 8px;
+  position: relative;
+  animation: phone-tilt 1.6s ease-in-out infinite;
+}
+
+.rotate-icon::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  width: 3px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 2px;
+  background: rgba(62, 207, 176, 0.7);
+}
+
+@keyframes phone-tilt {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  40% {
+    transform: rotate(90deg);
+  }
+  60% {
+    transform: rotate(90deg);
+  }
+}
+
+@media (min-width: 768px) and (orientation: landscape) {
+  .virtual-pad {
+    width: 140px;
+    height: 140px;
+  }
+  .boost-btn {
+    width: 92px;
+    height: 92px;
   }
 }

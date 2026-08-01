@@ -13,8 +13,10 @@ const btnHome = document.getElementById("btn-home");
 const hudLayer = document.getElementById("hud-layer");
 const hudForm = document.getElementById("hud-form");
 const hudPoints = document.getElementById("hud-points");
+const hudNuclei = document.getElementById("hud-nuclei");
 const hudEvolve = document.getElementById("hud-evolve");
 const boostBtn = document.getElementById("btn-boost");
+const rotateHint = document.getElementById("rotate-hint");
 
 const hud = {
   show() {
@@ -23,9 +25,20 @@ const hud = {
   hide() {
     hudEl.classList.add("hidden");
   },
-  setInfo({ layer, form, points, need, canEvolve, boostReady, boosting }) {
+  setInfo({
+    layer,
+    form,
+    points,
+    need,
+    nuclei,
+    nucleiMax,
+    canEvolve,
+    boostReady,
+    boosting,
+  }) {
     hudLayer.textContent = layer;
     hudForm.textContent = form;
+    hudNuclei.textContent = `细胞核 ${nuclei} / ${nucleiMax}`;
     hudPoints.textContent = `蛋白质 ${points}${need === "MAX" ? "" : ` / ${need}`}`;
     hudEvolve.classList.toggle("ready", !!canEvolve);
     hudEvolve.classList.toggle("boosting", !!boosting);
@@ -56,6 +69,32 @@ const overlay = {
 const game = new Game({ canvas, controlsRoot, hud, overlay });
 game.init();
 
+function isPortrait() {
+  return window.matchMedia("(orientation: portrait)").matches;
+}
+
+function syncOrientation() {
+  const portrait = isPortrait();
+  rotateHint.hidden = !portrait;
+  if (portrait) {
+    // 竖屏时暂停操作感，但仍可看标题
+    document.body.classList.add("portrait-lock");
+  } else {
+    document.body.classList.remove("portrait-lock");
+  }
+}
+
+async function preferLandscape() {
+  try {
+    const orient = screen.orientation || screen.mozOrientation || screen.msOrientation;
+    if (orient?.lock) {
+      await orient.lock("landscape");
+    }
+  } catch {
+    // 浏览器可能拒绝，保留旋转提示即可
+  }
+}
+
 game.onStateChange = (state) => {
   if (state === "title") {
     titleScreen.classList.remove("hidden");
@@ -64,12 +103,22 @@ game.onStateChange = (state) => {
   }
 };
 
-btnStart.addEventListener("click", () => {
+btnStart.addEventListener("click", async () => {
+  await preferLandscape();
+  if (isPortrait()) {
+    syncOrientation();
+    return;
+  }
   titleScreen.classList.add("hidden");
   game.start(0, true);
 });
 
-btnRetry.addEventListener("click", () => {
+btnRetry.addEventListener("click", async () => {
+  await preferLandscape();
+  if (isPortrait()) {
+    syncOrientation();
+    return;
+  }
   overlay.hide();
   game.start(0, true);
 });
@@ -82,8 +131,17 @@ btnHome.addEventListener("click", () => {
 document.addEventListener(
   "touchmove",
   (e) => {
-    if (!titleScreen.classList.contains("hidden")) return;
+    if (!titleScreen.classList.contains("hidden") && rotateHint.hidden) return;
     e.preventDefault();
   },
   { passive: false }
 );
+
+window.addEventListener("orientationchange", () => {
+  setTimeout(() => {
+    syncOrientation();
+    game.renderer.resize();
+  }, 120);
+});
+window.addEventListener("resize", syncOrientation);
+syncOrientation();

@@ -1,4 +1,4 @@
-import { EVOLUTIONS, LAYERS, PLAYER, WORLD } from "./config.js";
+import { EVOLUTIONS, LAYERS, PLAYER } from "./config.js";
 import {
   updatePlayer,
   updateEnemy,
@@ -6,7 +6,8 @@ import {
   applyEvolution,
   aliveNuclei,
   nucleusWorldPos,
-  clamp,
+  wrapEntity,
+  wrappedOffset,
 } from "./creature.js";
 import {
   createLevel,
@@ -105,11 +106,14 @@ export class Game {
     const player = this.level.player;
     const evo = EVOLUTIONS[player.evolutionId];
     const need = evo.pointsToEvolve;
+    const nucleiAlive = aliveNuclei(player).length;
     this.hud.setInfo({
       layer: this.level.layer.name,
       form: evo.name,
       points: this.level.points,
       need: need === Infinity ? "MAX" : need,
+      nuclei: nucleiAlive,
+      nucleiMax: player.nuclei.length,
       canEvolve: this._canEvolve(),
       boostReady: player.boostCooldown <= 0 && player.boostTimer <= 0,
       boosting: player.boostTimer > 0,
@@ -131,8 +135,10 @@ export class Game {
     const player = level.player;
 
     updatePlayer(player, this.input, dt);
-    player.x = clamp(player.x, 40, WORLD.width - 40);
-    player.y = clamp(player.y, 40, WORLD.height - 40);
+    const wrap = wrapEntity(player, level.world);
+    // 环面穿越时同步相机，避免“撞墙感”
+    this.camera.x += wrap.wx;
+    this.camera.y += wrap.wy;
 
     for (const c of level.creatures) {
       updateEnemy(c, player, dt, level.world);
@@ -166,11 +172,13 @@ export class Game {
   _collectPickups() {
     const level = this.level;
     const player = level.player;
+    const world = level.world;
 
     for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
       const p = level.proteins[i];
       p.phase += 0.05;
-      if (Math.hypot(p.x - player.x, p.y - player.y) < player.radius + p.r) {
+      const d = wrappedOffset(player.x, player.y, p.x, p.y, world).dist;
+      if (d < player.radius + p.r) {
         level.points += p.value;
         spawnBurst(level, p.x, p.y, p.color, 4);
         spawnFloatText(level, p.x, p.y, "+1", p.color);
@@ -183,7 +191,8 @@ export class Game {
       const d = level.dnas[i];
       d.phase += 0.04;
       if (!canEvolve) continue;
-      if (Math.hypot(d.x - player.x, d.y - player.y) < player.radius + d.r) {
+      const dist = wrappedOffset(player.x, player.y, d.x, d.y, world).dist;
+      if (dist < player.radius + d.r) {
         level.dnas.splice(i, 1);
         this._evolve();
         break;
@@ -213,27 +222,29 @@ export class Game {
   _resolveNucleusCombat() {
     const level = this.level;
     const player = level.player;
+    const world = level.world;
     if (!player.alive) return;
 
-    const playerNucleus = aliveNuclei(player)[0];
-    if (!playerNucleus) {
-      this._end("细胞核被吞噬", "你的细胞核被吞食，生命终止。");
+    const playerCores = aliveNuclei(player);
+    if (playerCores.length === 0) {
+      player.alive = false;
+      this._end("细胞核被吃光", "所有细胞核均被吞噬，生命终止。");
       return;
     }
-    const pN = nucleusWorldPos(player, playerNucleus);
 
     for (let i = level.creatures.length - 1; i >= 0; i -= 1) {
       const enemy = level.creatures[i];
       if (!enemy.alive) continue;
 
-      // 玩家吞敌方细胞核
-      for (const n of enemy.nuclei) {
-        if (!n.alive) continue;
-        const eN = nucleusWorldPos(enemy, n);
-        const eatRange = pN.r + eN.r + PLAYER.eatRangeBonus;
-        if (Math.hypot(pN.x - eN.x, pN.y - eN.y) < eatRange) {
-          // 需要体型接近或更大才能稳定吞噬核
-          if (player.radius + 8 >= enemy.radius * 0.55) {
+      // 玩家任一细胞核可吞噬敌方核
+      for (const pn of playerCores) {
+        const pN = nucleusWorldPos(player, pn);
+        for (const n of enemy.nuclei) {
+          if (!n.alive) continue;
+          const eN = nucleusWorldPos(enemy, n);
+          const off = wrappedOffset(pN.x, pN.y, eN.x, eN.y, world);
+          const eatRange = pN.r + eN.r + PLAYER.eatRangeBonus;
+          if (off.dist < eatRange && player.radius + 8 >= enemy.radius * 0.55) {
             n.alive = false;
             spawnBurst(level, eN.x, eN.y, enemy.coreColor, 8);
             spawnFloatText(level, eN.x, eN.y, "核破", enemy.coreColor);
@@ -255,27 +266,39 @@ export class Game {
         continue;
       }
 
-      // 敌方吞玩家细胞核 → 结束
+      // 敌方吞掉玩家一个核；全部吃光才结束
       if (player.invuln > 0) continue;
+      const threat =
+        enemy.kind === "boss" || enemy.radius >= player.radius * 0.85;
+      if (!threat) continue;
+
+      let hit = false;
       for (const n of enemy.nuclei) {
-        if (!n.alive) continue;
+        if (!n.alive || hit) continue;
         const eN = nucleusWorldPos(enemy, n);
-        // Boss / 攻击性生物的核可吞噬玩家核
-        const threat =
-          enemy.kind === "boss" || enemy.radius >= player.radius * 0.85;
-        if (!threat) continue;
-        if (Math.hypot(eN.x - pN.x, eN.y - pN.y) < eN.r + pN.r + 2) {
-          playerNucleus.alive = false;
-          player.alive = false;
-          spawnBurst(level, pN.x, pN.y, player.coreColor, 22);
-          this._end(
-            "细胞核被吞噬",
-            enemy.kind === "boss"
-              ? `${enemy.name} 吞噬了你的细胞核。`
-              : "敌方生物吞噬了你的细胞核。"
-          );
-          return;
+        for (const pn of aliveNuclei(player)) {
+          const pN = nucleusWorldPos(player, pn);
+          const off = wrappedOffset(eN.x, eN.y, pN.x, pN.y, world);
+          if (off.dist < eN.r + pN.r + 2) {
+            pn.alive = false;
+            player.invuln = PLAYER.nucleusHurtCooldown;
+            spawnBurst(level, pN.x, pN.y, player.coreColor, 14);
+            spawnFloatText(level, pN.x, pN.y, "核损", "#e07a6a");
+            hit = true;
+            break;
+          }
         }
+      }
+
+      if (aliveNuclei(player).length === 0) {
+        player.alive = false;
+        this._end(
+          "细胞核被吃光",
+          enemy.kind === "boss"
+            ? `${enemy.name} 吃光了你的细胞核。`
+            : "敌方生物吃光了你的细胞核。"
+        );
+        return;
       }
     }
   }
@@ -307,7 +330,14 @@ export class Game {
     if (!level.portal.open) return;
 
     const player = level.player;
-    if (Math.hypot(player.x - level.portal.x, player.y - level.portal.y) < level.portal.r) {
+    const dist = wrappedOffset(
+      player.x,
+      player.y,
+      level.portal.x,
+      level.portal.y,
+      level.world
+    ).dist;
+    if (dist < level.portal.r) {
       const next = level.layerIndex + 1;
       if (next < LAYERS.length) {
         this.playerState.evolvedThisLayer = false;

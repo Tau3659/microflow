@@ -15,6 +15,26 @@ function camOf(camera, factor) {
   return { x: camera.x * factor, y: camera.y * factor };
 }
 
+/** 环面地图：在边界附近绘制镜像副本，消除接缝 */
+function forEachWrapDraw(x, y, camera, world, viewW, viewH, margin, fn) {
+  const offsetsX = [0];
+  const offsetsY = [0];
+  if (world) {
+    offsetsX.push(-world.width, world.width);
+    offsetsY.push(-world.height, world.height);
+  }
+  for (const ox of offsetsX) {
+    for (const oy of offsetsY) {
+      const sx = x + ox - camera.x;
+      const sy = y + oy - camera.y;
+      if (sx < -margin || sy < -margin || sx > viewW + margin || sy > viewH + margin) {
+        continue;
+      }
+      fn(sx, sy, ox, oy);
+    }
+  }
+}
+
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -347,222 +367,246 @@ export class Renderer {
     ctx.closePath();
   }
 
-  drawGhosts(ghosts, camera) {
+  drawGhosts(ghosts, camera, world) {
     if (!ghosts?.length) return;
     const ghostCam = camOf(camera, PARALLAX.ghost);
     const ctx = this.ctx;
     for (const g of ghosts) {
-      const x = g.x - ghostCam.x;
-      const y = g.y - ghostCam.y;
-      if (x < -120 || y < -120 || x > this.w + 120 || y > this.h + 120) continue;
-      const alpha = g.isBossSilhouette ? 0.16 : 0.12;
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.globalAlpha = 1;
-      // 柔光剪影
-      const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, g.radius * 1.4);
-      glow.addColorStop(0, hexToRgba(g.color, alpha * 1.4));
-      glow.addColorStop(1, hexToRgba(g.color, 0));
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(0, 0, g.radius * 1.4, 0, Math.PI * 2);
-      ctx.fill();
-      this.drawMorphBody(g, alpha + 0.08, true);
-      ctx.restore();
+      forEachWrapDraw(g.x, g.y, ghostCam, world, this.w, this.h, 140, (x, y) => {
+        const alpha = g.isBossSilhouette ? 0.16 : 0.12;
+        ctx.save();
+        ctx.translate(x, y);
+        const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, g.radius * 1.4);
+        glow.addColorStop(0, hexToRgba(g.color, alpha * 1.4));
+        glow.addColorStop(1, hexToRgba(g.color, 0));
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, g.radius * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        this.drawMorphBody(g, alpha + 0.08, true);
+        ctx.restore();
+      });
     }
   }
 
-  drawProteins(proteins, camera) {
+  drawProteins(proteins, camera, world) {
     const ctx = this.ctx;
     for (const p of proteins) {
-      const x = p.x - camera.x;
-      const y = p.y - camera.y;
-      if (x < -20 || y < -20 || x > this.w + 20 || y > this.h + 20) continue;
-      const pulse = 0.85 + Math.sin(this.time * 3.2 + p.phase) * 0.15;
-      ctx.beginPath();
-      ctx.fillStyle = hexToRgba(p.color, 0.9);
-      ctx.shadowColor = p.color;
-      ctx.shadowBlur = 10;
-      ctx.arc(x, y, p.r * pulse, 0, Math.PI * 2);
-      ctx.fill();
+      forEachWrapDraw(p.x, p.y, camera, world, this.w, this.h, 24, (x, y) => {
+        const pulse = 0.85 + Math.sin(this.time * 3.2 + p.phase) * 0.15;
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba(p.color, 0.9);
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 10;
+        ctx.arc(x, y, p.r * pulse, 0, Math.PI * 2);
+        ctx.fill();
+      });
     }
     ctx.shadowBlur = 0;
   }
 
-  drawDnas(dnas, camera, canEvolve) {
+  drawDnas(dnas, camera, canEvolve, world) {
     const ctx = this.ctx;
     for (const d of dnas) {
-      const x = d.x - camera.x;
-      const y = d.y - camera.y;
-      if (x < -30 || y < -30 || x > this.w + 30 || y > this.h + 30) continue;
-      const pulse = 1 + Math.sin(this.time * 4 + d.phase) * 0.08;
+      forEachWrapDraw(d.x, d.y, camera, world, this.w, this.h, 36, (x, y) => {
+        const pulse = 1 + Math.sin(this.time * 4 + d.phase) * 0.08;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(this.time * 1.2 + d.phase);
+        ctx.scale(pulse, pulse);
+        ctx.shadowColor = d.color;
+        ctx.shadowBlur = canEvolve ? 16 : 6;
+        ctx.strokeStyle = hexToRgba(d.color, canEvolve ? 0.95 : 0.4);
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        for (let i = -8; i <= 8; i += 1) {
+          const t = i / 8;
+          const px = t * d.r;
+          const py = Math.sin(t * Math.PI * 2) * d.r * 0.45;
+          if (i === -8) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.beginPath();
+        for (let i = -8; i <= 8; i += 1) {
+          const t = i / 8;
+          const px = t * d.r;
+          const py = -Math.sin(t * Math.PI * 2) * d.r * 0.45;
+          if (i === -8) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        if (canEvolve) {
+          ctx.fillStyle = hexToRgba(d.color, 0.2);
+          ctx.beginPath();
+          ctx.arc(0, 0, d.r * 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      });
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  drawCreature(creature, camera, world) {
+    const ctx = this.ctx;
+
+    forEachWrapDraw(
+      creature.x,
+      creature.y,
+      camera,
+      world,
+      this.w,
+      this.h,
+      200,
+      (headX, headY, ox, oy) => {
+        ctx.save();
+        ctx.translate(headX, headY);
+        if (creature.kind === "player" && creature.boostTimer > 0) {
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba("#e8c27a", 0.45);
+          ctx.lineWidth = 2;
+          ctx.arc(0, 0, creature.radius * 1.4, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        this.drawMorphBody(creature, creature.kind === "player" ? 1 : 0.92, false);
+        ctx.restore();
+
+        for (const n of creature.nuclei || []) {
+          if (!n.alive) continue;
+          const wp = nucleusWorldPos(creature, n);
+          const nx = wp.x + ox - camera.x;
+          const ny = wp.y + oy - camera.y;
+          const pulse = 1 + Math.sin(creature.pulse) * 0.05;
+          ctx.beginPath();
+          ctx.fillStyle = hexToRgba(creature.coreColor, 0.95);
+          ctx.shadowColor = creature.coreColor;
+          ctx.shadowBlur = 12;
+          ctx.arc(nx, ny, wp.r * pulse, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.fillStyle = hexToRgba("#031016", 0.55);
+          ctx.shadowBlur = 0;
+          ctx.arc(nx, ny, wp.r * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (creature.kind === "boss") {
+          // 淡淡领地圈，提示不会无限追杀
+          if (creature.homeX != null) {
+            const hx = creature.homeX + ox - camera.x;
+            const hy = creature.homeY + oy - camera.y;
+            ctx.beginPath();
+            ctx.strokeStyle = hexToRgba(creature.color, 0.12);
+            ctx.lineWidth = 1;
+            ctx.setLineDash([6, 8]);
+            ctx.arc(hx, hy, creature.territoryRadius || 460, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba(creature.color, 0.45);
+          ctx.lineWidth = 1.5;
+          ctx.arc(headX, headY, creature.radius * 1.35, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = hexToRgba("#e8f4f2", 0.7);
+          ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(creature.name, headX, headY - creature.radius - 16);
+          const state =
+            creature.aiState === "chase"
+              ? "警戒"
+              : creature.aiState === "return"
+                ? "归巢"
+                : "巡逻";
+          ctx.fillText(
+            `核 ${aliveNuclei(creature).length} · ${state}`,
+            headX,
+            headY - creature.radius - 3
+          );
+        }
+
+        if (creature.kind === "player") {
+          const evo = EVOLUTIONS[creature.evolutionId];
+          if (evo && evo.complexity >= 2) {
+            ctx.beginPath();
+            ctx.strokeStyle = hexToRgba(creature.membrane || creature.color, 0.25);
+            ctx.lineWidth = 1;
+            ctx.arc(headX, headY, creature.radius * 1.15, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+
+        ctx.shadowBlur = 0;
+      }
+    );
+  }
+
+  drawPortal(portal, camera, open, world) {
+    if (!portal) return;
+    const ctx = this.ctx;
+    forEachWrapDraw(portal.x, portal.y, camera, world, this.w, this.h, 120, (x, y) => {
+      const pulse = 1 + Math.sin(portal.pulse * 2.8) * 0.08;
+      const r = portal.r * pulse;
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(this.time * 1.2 + d.phase);
-      ctx.scale(pulse, pulse);
-      ctx.shadowColor = d.color;
-      ctx.shadowBlur = canEvolve ? 16 : 6;
-      ctx.strokeStyle = hexToRgba(d.color, canEvolve ? 0.95 : 0.4);
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      for (let i = -8; i <= 8; i += 1) {
-        const t = i / 8;
-        const px = t * d.r;
-        const py = Math.sin(t * Math.PI * 2) * d.r * 0.45;
-        if (i === -8) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-      ctx.beginPath();
-      for (let i = -8; i <= 8; i += 1) {
-        const t = i / 8;
-        const px = t * d.r;
-        const py = -Math.sin(t * Math.PI * 2) * d.r * 0.45;
-        if (i === -8) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-      if (canEvolve) {
-        ctx.fillStyle = hexToRgba(d.color, 0.2);
+      ctx.rotate(portal.pulse * 0.5);
+      for (let i = 0; i < 3; i += 1) {
         ctx.beginPath();
-        ctx.arc(0, 0, d.r * 1.2, 0, Math.PI * 2);
+        ctx.strokeStyle = open
+          ? hexToRgba("#3ecfb0", 0.6 - i * 0.15)
+          : "rgba(232,244,242,0.18)";
+        ctx.lineWidth = 2;
+        ctx.ellipse(0, 0, r * (1 + i * 0.2), r * (0.55 + i * 0.08), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if (open) {
+        const g = ctx.createRadialGradient(0, 0, 2, 0, 0, r);
+        g.addColorStop(0, "rgba(62,207,176,0.35)");
+        g.addColorStop(1, "rgba(62,207,176,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
-    }
-    ctx.shadowBlur = 0;
-  }
-
-  drawCreature(creature, camera) {
-    const ctx = this.ctx;
-    const headX = creature.x - camera.x;
-    const headY = creature.y - camera.y;
-    if (headX < -180 || headY < -180 || headX > this.w + 180 || headY > this.h + 180) {
-      return;
-    }
-
-    ctx.save();
-    ctx.translate(headX, headY);
-    if (creature.kind === "player" && creature.boostTimer > 0) {
-      ctx.beginPath();
-      ctx.strokeStyle = hexToRgba("#e8c27a", 0.45);
-      ctx.lineWidth = 2;
-      ctx.arc(0, 0, creature.radius * 1.4, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    this.drawMorphBody(creature, creature.kind === "player" ? 1 : 0.92, false);
-    ctx.restore();
-
-    // 细胞核
-    for (const n of creature.nuclei || []) {
-      if (!n.alive) continue;
-      const wp = nucleusWorldPos(creature, n);
-      const nx = wp.x - camera.x;
-      const ny = wp.y - camera.y;
-      const pulse = 1 + Math.sin(creature.pulse) * 0.05;
-      ctx.beginPath();
-      ctx.fillStyle = hexToRgba(creature.coreColor, 0.95);
-      ctx.shadowColor = creature.coreColor;
-      ctx.shadowBlur = 12;
-      ctx.arc(nx, ny, wp.r * pulse, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.fillStyle = hexToRgba("#031016", 0.55);
-      ctx.shadowBlur = 0;
-      ctx.arc(nx, ny, wp.r * 0.35, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    if (creature.kind === "boss") {
-      ctx.beginPath();
-      ctx.strokeStyle = hexToRgba(creature.color, 0.45);
-      ctx.lineWidth = 1.5;
-      ctx.arc(headX, headY, creature.radius * 1.35, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = hexToRgba("#e8f4f2", 0.7);
-      ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillStyle = open ? "rgba(232,244,242,0.8)" : "rgba(232,244,242,0.35)";
+      ctx.font = "12px -apple-system, BlinkMacSystemFont, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(creature.name, headX, headY - creature.radius - 16);
-      ctx.fillText(`核 ${aliveNuclei(creature).length}`, headX, headY - creature.radius - 3);
-    }
-
-    // 玩家进化标签感：轻微外膜
-    if (creature.kind === "player") {
-      const evo = EVOLUTIONS[creature.evolutionId];
-      if (evo && evo.complexity >= 2) {
-        ctx.beginPath();
-        ctx.strokeStyle = hexToRgba(creature.membrane || creature.color, 0.25);
-        ctx.lineWidth = 1;
-        ctx.arc(headX, headY, creature.radius * 1.15, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
-
-    ctx.shadowBlur = 0;
+      ctx.fillText(open ? "进入上一层生物圈" : "进化后开启", x, y + r + 18);
+    });
   }
 
-  drawPortal(portal, camera, open) {
-    if (!portal) return;
-    const ctx = this.ctx;
-    const x = portal.x - camera.x;
-    const y = portal.y - camera.y;
-    if (x < -100 || y < -100 || x > this.w + 100 || y > this.h + 100) return;
-
-    const pulse = 1 + Math.sin(portal.pulse * 2.8) * 0.08;
-    const r = portal.r * pulse;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(portal.pulse * 0.5);
-    for (let i = 0; i < 3; i += 1) {
-      ctx.beginPath();
-      ctx.strokeStyle = open
-        ? hexToRgba("#3ecfb0", 0.6 - i * 0.15)
-        : "rgba(232,244,242,0.18)";
-      ctx.lineWidth = 2;
-      ctx.ellipse(0, 0, r * (1 + i * 0.2), r * (0.55 + i * 0.08), 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    if (open) {
-      const g = ctx.createRadialGradient(0, 0, 2, 0, 0, r);
-      g.addColorStop(0, "rgba(62,207,176,0.35)");
-      g.addColorStop(1, "rgba(62,207,176,0)");
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-    ctx.fillStyle = open ? "rgba(232,244,242,0.8)" : "rgba(232,244,242,0.35)";
-    ctx.font = "12px -apple-system, BlinkMacSystemFont, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(open ? "进入上一层生物圈" : "进化后开启", x, y + r + 18);
-  }
-
-  drawParticles(particles, camera) {
+  drawParticles(particles, camera, world) {
     const ctx = this.ctx;
     for (const p of particles) {
       const a = Math.max(0, p.life / p.maxLife);
-      ctx.beginPath();
-      ctx.fillStyle = hexToRgba(p.color, a);
-      ctx.arc(p.x - camera.x, p.y - camera.y, p.r * a, 0, Math.PI * 2);
-      ctx.fill();
+      forEachWrapDraw(p.x, p.y, camera, world, this.w, this.h, 20, (x, y) => {
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba(p.color, a);
+        ctx.arc(x, y, p.r * a, 0, Math.PI * 2);
+        ctx.fill();
+      });
     }
   }
 
-  drawFloats(floats, camera) {
+  drawFloats(floats, camera, world) {
     const ctx = this.ctx;
     ctx.textAlign = "center";
     ctx.font = "13px -apple-system, BlinkMacSystemFont, sans-serif";
     for (const f of floats) {
       const a = Math.max(0, f.life / f.maxLife);
-      ctx.fillStyle = hexToRgba(f.color, a);
-      ctx.fillText(f.text, f.x - camera.x, f.y - camera.y - (1 - a) * 28);
+      forEachWrapDraw(f.x, f.y, camera, world, this.w, this.h, 30, (x, y) => {
+        ctx.fillStyle = hexToRgba(f.color, a);
+        ctx.fillText(f.text, x, y - (1 - a) * 28);
+      });
     }
   }
 
   render(level, camera, canEvolve, portalOpen) {
     this.time += 0.016;
     const p = level.player;
+    const world = level.world;
     // 移动越快，深层与幽灵层相对滑动越明显
     this.motion.x += p.vx * 0.012;
     this.motion.y += p.vy * 0.012;
@@ -579,13 +623,13 @@ export class Renderer {
     };
 
     this.drawLayeredBackground(level, deepShift);
-    this.drawGhosts(level.ghosts, ghostShift);
-    this.drawPortal(level.portal, camera, portalOpen);
-    this.drawProteins(level.proteins, camera);
-    this.drawDnas(level.dnas, camera, canEvolve);
-    for (const c of level.creatures) this.drawCreature(c, camera);
-    this.drawCreature(level.player, camera);
-    this.drawParticles(level.particles, camera);
-    this.drawFloats(level.floats, camera);
+    this.drawGhosts(level.ghosts, ghostShift, world);
+    this.drawPortal(level.portal, camera, portalOpen, world);
+    this.drawProteins(level.proteins, camera, world);
+    this.drawDnas(level.dnas, camera, canEvolve, world);
+    for (const c of level.creatures) this.drawCreature(c, camera, world);
+    this.drawCreature(level.player, camera, world);
+    this.drawParticles(level.particles, camera, world);
+    this.drawFloats(level.floats, camera, world);
   }
 }

@@ -8,22 +8,32 @@
   />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="screen-orientation" content="landscape" />
   <meta name="theme-color" content="#041820" />
   <title>菌流 · MICROFLOW</title>
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
+  <div id="rotate-hint" class="rotate-hint" hidden>
+    <div class="rotate-card">
+      <p class="rotate-brand">MICROFLOW</p>
+      <p class="rotate-title">请横屏游玩</p>
+      <p class="rotate-text">旋转手机至横向，沉浸微观之海</p>
+      <div class="rotate-icon" aria-hidden="true"></div>
+    </div>
+  </div>
+
   <div id="app">
     <canvas id="game" aria-label="菌流游戏画布"></canvas>
 
     <section id="title-screen" class="screen">
       <div class="title-atmosphere" aria-hidden="true"></div>
-      <div class="title-content">
+      <div class="title-content landscape-title">
         <p class="brand">MICROFLOW</p>
         <h1 class="brand-cn">菌流</h1>
         <p class="tagline">从原核细胞启程，吞噬细胞核，进化上行</p>
         <button id="btn-start" class="cta" type="button">开始演化</button>
-        <p class="hint">左摇杆移动 · 右键加速 · 吃蛋白质攒点 · DNA 进化</p>
+        <p class="hint">横屏 · 左摇杆移动 · 右键加速 · 细胞核被吃光则结束</p>
       </div>
     </section>
 
@@ -34,6 +44,7 @@
         <span id="hud-form">原核细胞</span>
       </div>
       <div class="hud-right">
+        <span id="hud-nuclei">细胞核 1 / 1</span>
         <span id="hud-points">蛋白质 0 / 12</span>
         <span id="hud-evolve" class="hud-evolve">收集蛋白质</span>
       </div>

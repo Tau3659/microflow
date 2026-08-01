@@ -1,4 +1,4 @@
-import { EVOLUTIONS, MORPH, PLAYER } from "./config.js";
+import { BOSS_AI, EVOLUTIONS, MORPH, PLAYER } from "./config.js";
 
 let nextId = 1;
 
@@ -13,6 +13,43 @@ export function length(x, y) {
 export function normalize(x, y) {
   const len = length(x, y) || 1;
   return { x: x / len, y: y / len };
+}
+
+/** 环面地图：穿越边界无墙感 */
+export function wrapEntity(entity, world) {
+  let wx = 0;
+  let wy = 0;
+  if (!world) return { wx, wy };
+  while (entity.x < 0) {
+    entity.x += world.width;
+    wx += world.width;
+  }
+  while (entity.x >= world.width) {
+    entity.x -= world.width;
+    wx -= world.width;
+  }
+  while (entity.y < 0) {
+    entity.y += world.height;
+    wy += world.height;
+  }
+  while (entity.y >= world.height) {
+    entity.y -= world.height;
+    wy -= world.height;
+  }
+  return { wx, wy };
+}
+
+/** 最短环面向量 */
+export function wrappedOffset(fromX, fromY, toX, toY, world) {
+  let dx = toX - fromX;
+  let dy = toY - fromY;
+  if (world) {
+    if (dx > world.width / 2) dx -= world.width;
+    if (dx < -world.width / 2) dx += world.width;
+    if (dy > world.height / 2) dy -= world.height;
+    if (dy < -world.height / 2) dy += world.height;
+  }
+  return { dx, dy, dist: Math.hypot(dx, dy) };
 }
 
 function makeNuclei(count, radius) {
@@ -142,6 +179,10 @@ export function createBoss(x, y, layer) {
     name: b.name,
     x,
     y,
+    homeX: x,
+    homeY: y,
+    territoryRadius: BOSS_AI.territoryRadius,
+    aiState: "patrol",
     vx: 0,
     vy: 0,
     angle: 0,
@@ -157,7 +198,7 @@ export function createBoss(x, y, layer) {
     segments,
     nuclei: makeNuclei(b.nuclei, b.radius),
     pulse: 0,
-    wanderAngle: 0,
+    wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
     aggro: 1,
     alive: true,
@@ -255,7 +296,94 @@ export function updatePlayer(player, input, dt) {
   syncSegments(player);
 }
 
+function steerCreature(creature, tx, ty, dt, speedMul = 1) {
+  const dir = normalize(tx, ty);
+  const targetAngle = Math.atan2(dir.y, dir.x);
+  let delta = targetAngle - creature.angle;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  creature.angle += delta * clamp((creature.kind === "boss" ? 3.2 : 2.6) * dt, 0, 1);
+
+  const base = creature.kind === "boss" ? 78 : 62;
+  const speed = (base + Math.min(40, creature.radius * 0.25)) * speedMul;
+  creature.vx = Math.cos(creature.angle) * speed;
+  creature.vy = Math.sin(creature.angle) * speed;
+  creature.x += creature.vx * dt;
+  creature.y += creature.vy * dt;
+  creature.pulse += dt * 2;
+  syncSegments(creature);
+}
+
+function updateBoss(creature, player, dt, world) {
+  const toPlayer = wrappedOffset(creature.x, creature.y, player.x, player.y, world);
+  const toHome = wrappedOffset(creature.x, creature.y, creature.homeX, creature.homeY, world);
+  const playerToHome = wrappedOffset(
+    creature.homeX,
+    creature.homeY,
+    player.x,
+    player.y,
+    world
+  );
+
+  const inTerritory = playerToHome.dist <= creature.territoryRadius;
+  const beyondLeash = toHome.dist > BOSS_AI.leashRadius;
+
+  if (creature.aiState === "chase") {
+    if (!inTerritory || beyondLeash) {
+      creature.aiState = "return";
+    }
+  } else if (creature.aiState === "return") {
+    if (toHome.dist < creature.territoryRadius * 0.35) {
+      creature.aiState = "patrol";
+    }
+  } else if (inTerritory && toPlayer.dist < BOSS_AI.aggroRadius) {
+    creature.aiState = "chase";
+  }
+
+  let tx;
+  let ty;
+  let speedMul = 1;
+
+  if (creature.aiState === "chase") {
+    tx = toPlayer.dx;
+    ty = toPlayer.dy;
+    speedMul = 1.05;
+  } else if (creature.aiState === "return") {
+    tx = toHome.dx;
+    ty = toHome.dy;
+    speedMul = BOSS_AI.returnSpeed;
+  } else {
+    // 领地内巡逻，不离开家太远
+    creature.wanderTimer -= dt;
+    if (creature.wanderTimer <= 0) {
+      creature.wanderTimer = 0.8 + Math.random() * 1.4;
+      const a = Math.random() * Math.PI * 2;
+      const dist = creature.territoryRadius * (0.25 + Math.random() * 0.45);
+      creature.patrolTargetX = creature.homeX + Math.cos(a) * dist;
+      creature.patrolTargetY = creature.homeY + Math.sin(a) * dist;
+    }
+    const toPatrol = wrappedOffset(
+      creature.x,
+      creature.y,
+      creature.patrolTargetX ?? creature.homeX,
+      creature.patrolTargetY ?? creature.homeY,
+      world
+    );
+    tx = toPatrol.dx;
+    ty = toPatrol.dy;
+    speedMul = 0.72;
+  }
+
+  steerCreature(creature, tx, ty, dt, speedMul);
+  wrapEntity(creature, world);
+}
+
 export function updateEnemy(creature, player, dt, world) {
+  if (creature.kind === "boss") {
+    updateBoss(creature, player, dt, world);
+    return;
+  }
+
   creature.wanderTimer -= dt;
   if (creature.wanderTimer <= 0) {
     creature.wanderTimer = 0.5 + Math.random() * 1.2;
@@ -265,50 +393,29 @@ export function updateEnemy(creature, player, dt, world) {
   let tx = Math.cos(creature.wanderAngle);
   let ty = Math.sin(creature.wanderAngle);
 
-  const toPlayerX = player.x - creature.x;
-  const toPlayerY = player.y - creature.y;
-  const dist = length(toPlayerX, toPlayerY);
-  const chaseRange = creature.kind === "boss" ? 620 : 280;
+  const toPlayer = wrappedOffset(creature.x, creature.y, player.x, player.y, world);
+  const chaseRange = 280;
 
-  if (dist < chaseRange) {
-    const n = normalize(toPlayerX, toPlayerY);
-    const weight = creature.kind === "boss" ? 1.8 : creature.aggro;
-    if (creature.kind === "normal" && player.radius > creature.radius * 1.25) {
+  if (toPlayer.dist < chaseRange) {
+    const n = normalize(toPlayer.dx, toPlayer.dy);
+    if (player.radius > creature.radius * 1.25) {
       tx = -n.x * 1.2 + tx * 0.3;
       ty = -n.y * 1.2 + ty * 0.3;
     } else {
-      tx = n.x * weight + tx * 0.25;
-      ty = n.y * weight + ty * 0.25;
+      tx = n.x * creature.aggro + tx * 0.25;
+      ty = n.y * creature.aggro + ty * 0.25;
     }
   }
 
-  const dir = normalize(tx, ty);
-  const targetAngle = Math.atan2(dir.y, dir.x);
-  let delta = targetAngle - creature.angle;
-  while (delta > Math.PI) delta -= Math.PI * 2;
-  while (delta < -Math.PI) delta += Math.PI * 2;
-  creature.angle += delta * clamp((creature.kind === "boss" ? 3.2 : 2.6) * dt, 0, 1);
-
-  const base = creature.kind === "boss" ? 78 : 62;
-  const speed = base + Math.min(40, creature.radius * 0.25);
-  creature.vx = Math.cos(creature.angle) * speed;
-  creature.vy = Math.sin(creature.angle) * speed;
-  creature.x = clamp(creature.x + creature.vx * dt, 50, world.width - 50);
-  creature.y = clamp(creature.y + creature.vy * dt, 50, world.height - 50);
-  creature.pulse += dt * 2;
-  syncSegments(creature);
+  steerCreature(creature, tx, ty, dt, 1);
+  wrapEntity(creature, world);
 }
 
 export function updateGhost(ghost, dt, world) {
   ghost.driftAngle += dt * 0.35;
   ghost.x += Math.cos(ghost.driftAngle) * ghost.drift * dt;
   ghost.y += Math.sin(ghost.driftAngle * 0.8) * ghost.drift * 0.7 * dt;
-  if (world) {
-    if (ghost.x < -40) ghost.x = world.width + 40;
-    if (ghost.x > world.width + 40) ghost.x = -40;
-    if (ghost.y < -40) ghost.y = world.height + 40;
-    if (ghost.y > world.height + 40) ghost.y = -40;
-  }
+  wrapEntity(ghost, world);
   ghost.angle += dt * 0.4;
   ghost.pulse += dt * 1.4;
 }

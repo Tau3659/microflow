@@ -30,7 +30,7 @@ export const EVOLUTIONS = [
     morph: MORPH.COCCUS,
     radius: 24,
     segmentCount: 5,
-    nuclei: 1,
+    nuclei: 2,
     color: "#5ec4c8",
     coreColor: "#b8f0ef",
     membrane: "#2a6f78",
@@ -44,7 +44,7 @@ export const EVOLUTIONS = [
     morph: MORPH.COLONY,
     radius: 34,
     segmentCount: 8,
-    nuclei: 1,
+    nuclei: 3,
     color: "#e8c27a",
     coreColor: "#ffe6a8",
     membrane: "#8a6a3a",
@@ -59,7 +59,7 @@ export const EVOLUTIONS = [
     morph: MORPH.COLONY,
     radius: 46,
     segmentCount: 12,
-    nuclei: 1,
+    nuclei: 4,
     color: "#7eb6ff",
     coreColor: "#d4e7ff",
     membrane: "#3a5a8a",
@@ -74,7 +74,7 @@ export const EVOLUTIONS = [
     morph: MORPH.VIRUS,
     radius: 58,
     segmentCount: 16,
-    nuclei: 1,
+    nuclei: 5,
     color: "#e07a6a",
     coreColor: "#ffc4bc",
     membrane: "#8a3a3a",
@@ -200,6 +200,15 @@ export const PLAYER = {
   boostCooldown: 1.35,
   turnRate: 9,
   segmentSpacing: 11,
-  nucleusRadiusFactor: 0.34,
+  nucleusRadiusFactor: 0.3,
   eatRangeBonus: 4,
+  nucleusHurtCooldown: 0.9,
+};
+
+/** Boss 领地 */
+export const BOSS_AI = {
+  territoryRadius: 460,
+  aggroRadius: 300,
+  leashRadius: 520,
+  returnSpeed: 1.15,
 };
