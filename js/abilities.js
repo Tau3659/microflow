@@ -112,25 +112,19 @@ export function syncPlayerMouth(player) {
   const base = Math.max(4, player.radius * 0.32 * scale);
   const morph = player.morph;
   let angle = 0;
-  let dist = 0.95;
+  let dist = 0.02;
   if (morph === "bacillus") {
     angle = 0;
-    dist = 1.12;
+    dist = 1.12; // 条形：一端
   } else if (morph === "spirillum") {
     angle = 0;
     dist = 1.08;
-  } else if (morph === "coccus") {
+  } else if (morph === "coccus" || morph === "colony" || morph === "virus") {
     angle = 0;
-    dist = 0.18;
-  } else if (morph === "colony") {
-    angle = 0.35;
-    dist = 0.92;
-  } else if (morph === "virus") {
-    angle = 0;
-    dist = 0.92;
+    dist = 0.02; // 圆形：中心
   } else if (morph === "phage") {
     angle = Math.PI / 2;
-    dist = 1.05;
+    dist = 1.05; // 注射端
   }
   const mouth = { mouthAngle: angle, mouthDist: dist, mouthRadius: base };
   player.mouths = [mouth];

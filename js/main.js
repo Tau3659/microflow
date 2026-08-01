@@ -1,4 +1,5 @@
 import { Game } from "./game.js";
+import { audio } from "./audio.js";
 
 const app = document.getElementById("app");
 const canvas = document.getElementById("game");
@@ -13,6 +14,13 @@ const btnHome = document.getElementById("btn-home");
 const btnExit = document.getElementById("btn-exit");
 const boostBtn = document.getElementById("btn-boost");
 const boostRingFill = document.getElementById("boost-ring-fill");
+const btnSettings = document.getElementById("btn-settings");
+const settingsPanel = document.getElementById("settings-panel");
+const btnSettingsClose = document.getElementById("btn-settings-close");
+const toggleMusic = document.getElementById("toggle-music");
+const toggleSfx = document.getElementById("toggle-sfx");
+const volMusic = document.getElementById("vol-music");
+const volSfx = document.getElementById("vol-sfx");
 const BOOST_RING_LEN = 2 * Math.PI * 32;
 
 const hud = {
@@ -47,6 +55,28 @@ const overlay = {
 
 const game = new Game({ canvas, controlsRoot, hud, overlay });
 game.init();
+
+function syncSettingsUi() {
+  const s = audio.getSettings();
+  toggleMusic.setAttribute("aria-pressed", s.musicEnabled ? "true" : "false");
+  toggleSfx.setAttribute("aria-pressed", s.sfxEnabled ? "true" : "false");
+  volMusic.value = String(Math.round(s.musicVolume * 100));
+  volSfx.value = String(Math.round(s.sfxVolume * 100));
+  volMusic.disabled = !s.musicEnabled;
+  volSfx.disabled = !s.sfxEnabled;
+}
+
+function openSettings() {
+  syncSettingsUi();
+  settingsPanel.classList.remove("hidden");
+  btnSettings.setAttribute("aria-expanded", "true");
+  audio.unlock();
+}
+
+function closeSettings() {
+  settingsPanel.classList.add("hidden");
+  btnSettings.setAttribute("aria-expanded", "false");
+}
 
 function isPortrait() {
   if (window.matchMedia("(orientation: portrait)").matches) return true;
@@ -122,6 +152,7 @@ function syncOrientation() {
 
 function returnToTitle() {
   overlay.hide();
+  closeSettings();
   game.goHome();
   titleScreen.classList.remove("hidden");
   exitFullscreen();
@@ -132,18 +163,22 @@ game.onStateChange = (state) => {
     titleScreen.classList.remove("hidden");
   } else if (state === "playing") {
     titleScreen.classList.add("hidden");
+    closeSettings();
   }
 };
 
 btnStart.addEventListener("click", async () => {
+  await audio.unlock();
   await enterFullscreen();
   titleScreen.classList.add("hidden");
+  closeSettings();
   syncOrientation();
   game.renderer.resize();
   game.start(0, true);
 });
 
 btnRetry.addEventListener("click", async () => {
+  await audio.unlock();
   await enterFullscreen();
   overlay.hide();
   syncOrientation();
@@ -156,6 +191,40 @@ btnExit.addEventListener("click", (e) => {
   e.preventDefault();
   e.stopPropagation();
   returnToTitle();
+});
+
+btnSettings.addEventListener("click", () => {
+  if (settingsPanel.classList.contains("hidden")) openSettings();
+  else closeSettings();
+});
+btnSettingsClose.addEventListener("click", () => closeSettings());
+settingsPanel.addEventListener("click", (e) => {
+  if (e.target === settingsPanel) closeSettings();
+});
+
+toggleMusic.addEventListener("click", async () => {
+  await audio.unlock();
+  const on = toggleMusic.getAttribute("aria-pressed") !== "true";
+  audio.applySettings({ musicEnabled: on });
+  syncSettingsUi();
+});
+
+toggleSfx.addEventListener("click", async () => {
+  await audio.unlock();
+  const on = toggleSfx.getAttribute("aria-pressed") !== "true";
+  audio.applySettings({ sfxEnabled: on });
+  syncSettingsUi();
+  if (on) audio.playEvolve();
+});
+
+volMusic.addEventListener("input", async () => {
+  await audio.unlock();
+  audio.applySettings({ musicVolume: Number(volMusic.value) / 100 });
+});
+
+volSfx.addEventListener("input", async () => {
+  await audio.unlock();
+  audio.applySettings({ sfxVolume: Number(volSfx.value) / 100 });
 });
 
 document.addEventListener(
@@ -197,3 +266,4 @@ document.addEventListener("webkitfullscreenchange", () => {
 });
 
 syncOrientation();
+syncSettingsUi();

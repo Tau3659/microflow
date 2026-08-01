@@ -18,12 +18,38 @@
 
     <section id="title-screen" class="screen">
       <div class="title-atmosphere" aria-hidden="true"></div>
+      <button id="btn-settings" class="settings-gear" type="button" aria-label="设置" aria-expanded="false">
+        <span class="icon-gear" aria-hidden="true"></span>
+      </button>
       <div class="title-content">
         <p class="brand">MICROFLOW</p>
         <h1 class="brand-cn">菌流</h1>
         <button id="btn-start" class="cta icon-cta" type="button" aria-label="开始">
           <span class="icon-play" aria-hidden="true"></span>
         </button>
+      </div>
+      <div id="settings-panel" class="settings-panel hidden" role="dialog" aria-label="音频设置">
+        <div class="settings-sheet">
+          <div class="settings-row">
+            <label class="settings-label" for="toggle-music">音乐</label>
+            <button id="toggle-music" class="toggle" type="button" aria-pressed="true"></button>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="vol-music">音量</label>
+            <input id="vol-music" class="vol-slider" type="range" min="0" max="100" value="45" />
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="toggle-sfx">音效</label>
+            <button id="toggle-sfx" class="toggle" type="button" aria-pressed="true"></button>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="vol-sfx">音量</label>
+            <input id="vol-sfx" class="vol-slider" type="range" min="0" max="100" value="55" />
+          </div>
+          <button id="btn-settings-close" class="cta icon-cta ghost settings-close" type="button" aria-label="关闭">
+            <span class="icon-close" aria-hidden="true"></span>
+          </button>
+        </div>
       </div>
     </section>
 

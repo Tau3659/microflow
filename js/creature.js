@@ -171,8 +171,10 @@ function makeNuclei(count, radius, morph = MORPH.COCCUS) {
 }
 
 /**
- * 按外形布置嘴位：线形在顶端、圆形靠近中心、集群在外周细胞、噬菌体在头部下方等。
- * 嘴数量随等级适度增加。
+ * 嘴位规则：
+ * - 圆形（球菌/病毒/团簇感）：单嘴居中，多嘴均匀散布
+ * - 条形（杆菌/螺旋菌）：单嘴在一端，双嘴在两端
+ * - 噬菌体：注射端（条形一端）
  */
 function makeMouths(morph, radius, count = 1) {
   const n = Math.max(1, count | 0);
@@ -180,62 +182,49 @@ function makeMouths(morph, radius, count = 1) {
   const mouths = [];
 
   if (morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM) {
-    // 线形：嘴在前进顶端，多嘴时略偏左右
-    for (let i = 0; i < n; i += 1) {
-      const spread = n === 1 ? 0 : (i - (n - 1) / 2) * 0.32;
-      mouths.push({
-        mouthAngle: spread,
-        mouthDist: morph === MORPH.SPIRILLUM ? 1.08 : 1.12,
-        mouthRadius: baseR * (i === 0 ? 1 : 0.88),
-      });
-    }
-  } else if (morph === MORPH.COCCUS) {
-    // 圆形：嘴靠近体心（略偏前），多嘴环绕近心区
-    for (let i = 0; i < n; i += 1) {
-      const a = n === 1 ? 0 : (Math.PI * 2 * i) / n;
-      mouths.push({
-        mouthAngle: a,
-        mouthDist: n === 1 ? 0.16 : 0.32,
-        mouthRadius: baseR,
-      });
-    }
-  } else if (morph === MORPH.COLONY) {
-    // 集群：嘴分布在外周细胞上
-    for (let i = 0; i < n; i += 1) {
-      const a = (Math.PI * 2 * i) / n + 0.35;
-      mouths.push({
-        mouthAngle: a,
-        mouthDist: 0.88 + (i % 2) * 0.1,
-        mouthRadius: baseR * 0.95,
-      });
-    }
-  } else if (morph === MORPH.VIRUS) {
-    // 囊膜病毒：嘴在外壳边缘朝外
-    for (let i = 0; i < n; i += 1) {
-      const a = (Math.PI * 2 * i) / n;
-      mouths.push({
-        mouthAngle: a,
-        mouthDist: 0.92,
-        mouthRadius: baseR * 0.9,
-      });
+    const tip = morph === MORPH.SPIRILLUM ? 1.08 : 1.12;
+    if (n === 1) {
+      mouths.push({ mouthAngle: 0, mouthDist: tip, mouthRadius: baseR });
+    } else {
+      // 两端
+      mouths.push({ mouthAngle: 0, mouthDist: tip, mouthRadius: baseR });
+      mouths.push({ mouthAngle: Math.PI, mouthDist: tip, mouthRadius: baseR * 0.92 });
+      for (let i = 2; i < n; i += 1) {
+        const a = (Math.PI * 2 * (i - 2)) / Math.max(1, n - 2);
+        mouths.push({ mouthAngle: a, mouthDist: tip * 0.7, mouthRadius: baseR * 0.8 });
+      }
     }
   } else if (morph === MORPH.PHAGE) {
-    // 噬菌体：主嘴在尾刺/注射端（局部下方），额外嘴在头侧
-    mouths.push({ mouthAngle: Math.PI / 2, mouthDist: 1.05, mouthRadius: baseR });
-    for (let i = 1; i < n; i += 1) {
-      mouths.push({
-        mouthAngle: Math.PI / 2 + (i % 2 ? 0.5 : -0.5),
-        mouthDist: 0.85,
-        mouthRadius: baseR * 0.78,
-      });
+    // 条形结构：注射端为一端
+    if (n === 1) {
+      mouths.push({ mouthAngle: Math.PI / 2, mouthDist: 1.05, mouthRadius: baseR });
+    } else {
+      mouths.push({ mouthAngle: Math.PI / 2, mouthDist: 1.05, mouthRadius: baseR });
+      mouths.push({ mouthAngle: -Math.PI / 2, mouthDist: 0.85, mouthRadius: baseR * 0.85 });
+    }
+  } else if (morph === MORPH.COCCUS || morph === MORPH.VIRUS || morph === MORPH.COLONY) {
+    if (n === 1) {
+      // 圆形：嘴在体心
+      mouths.push({ mouthAngle: 0, mouthDist: 0.02, mouthRadius: baseR });
+    } else {
+      // 均匀散布
+      const ring = morph === MORPH.COLONY ? 0.78 : morph === MORPH.VIRUS ? 0.72 : 0.55;
+      for (let i = 0; i < n; i += 1) {
+        const a = (Math.PI * 2 * i) / n;
+        mouths.push({ mouthAngle: a, mouthDist: ring, mouthRadius: baseR * 0.92 });
+      }
     }
   } else {
-    for (let i = 0; i < n; i += 1) {
-      mouths.push({
-        mouthAngle: (Math.PI * 2 * i) / n,
-        mouthDist: 0.9,
-        mouthRadius: baseR,
-      });
+    if (n === 1) {
+      mouths.push({ mouthAngle: 0, mouthDist: 0.02, mouthRadius: baseR });
+    } else {
+      for (let i = 0; i < n; i += 1) {
+        mouths.push({
+          mouthAngle: (Math.PI * 2 * i) / n,
+          mouthDist: 0.6,
+          mouthRadius: baseR,
+        });
+      }
     }
   }
 

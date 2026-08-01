@@ -27,6 +27,7 @@ import {
 import { grantAbility } from "./abilities.js";
 import { Renderer } from "./renderer.js";
 import { Input } from "./input.js";
+import { audio } from "./audio.js";
 
 export class Game {
   constructor({ canvas, controlsRoot, hud, overlay }) {
@@ -48,6 +49,7 @@ export class Game {
       abilities: null,
     };
     this.onStateChange = null;
+    this.transition = null;
   }
 
   init() {
@@ -68,6 +70,8 @@ export class Game {
         abilities: null,
       };
     }
+    this.transition = null;
+    audio.setThreatLevel(0);
     this.level = createLevel(layerIndex, this.playerState);
     this.ended = false;
     this.running = true;
@@ -90,6 +94,8 @@ export class Game {
 
   goHome() {
     this.stop();
+    this.transition = null;
+    audio.setThreatLevel(0);
     this.hud.hide();
     this.overlay.hide();
     this.onStateChange?.("title");
@@ -133,12 +139,22 @@ export class Game {
     const dt = Math.min(0.033, (now - this.last) / 1000 || 0.016);
     this.last = now;
     this._update(dt);
-    this.renderer.render(this.level, this.camera, this._canEvolve(), this._portalOpen());
+    const tr = this.transition;
+    const trAlpha = tr ? (tr.phase === "out" ? tr.t : 1 - tr.t) : 0;
+    this.renderer.render(
+      this.level,
+      this.camera,
+      this._canEvolve(),
+      this._portalOpen(),
+      trAlpha
+    );
     this.raf = requestAnimationFrame((t) => this._loop(t));
   }
 
   _update(dt) {
     if (this.ended) return;
+    if (this._updateTransition(dt)) return;
+
     const level = this.level;
     const player = level.player;
 
@@ -162,6 +178,7 @@ export class Game {
     this._resolveNucleusCombat();
     this._updateVfx(dt);
     this._updatePortal(dt);
+    this._updateThreatAudio();
 
     maintainPickups(level);
     this.playerState.points = level.points;
@@ -290,10 +307,64 @@ export class Game {
     level.evolvedThisLayer = true;
     spawnBurst(level, player.x, player.y, evo.color, 22);
     spawnBurst(level, player.x, player.y, player.coreColor || evo.coreColor, 16);
+    audio.playEvolve();
 
     if (level.portal && level.layerIndex < LAYERS.length - 1) {
       level.portal.open = true;
     }
+  }
+
+  _updateThreatAudio() {
+    const level = this.level;
+    const player = level.player;
+    let nearest = Infinity;
+    for (const c of level.creatures) {
+      if (!c.alive || !isAggressive(c)) continue;
+      const d = wrappedOffset(player.x, player.y, c.x, c.y, level.world).dist;
+      if (d < nearest) nearest = d;
+    }
+    // 约 420 内开始听到，越近越大
+    const range = 420;
+    const levelThreat =
+      nearest < range ? Math.pow(1 - nearest / range, 1.35) : 0;
+    audio.setThreatLevel(levelThreat);
+  }
+
+  /** @returns {boolean} true 表示本帧跳过常规更新 */
+  _updateTransition(dt) {
+    const tr = this.transition;
+    if (!tr) return false;
+    audio.setThreatLevel(0);
+    tr.t += dt / tr.duration;
+    if (tr.phase === "out") {
+      if (tr.t >= 1) {
+        tr.t = 0;
+        tr.phase = "in";
+        this.playerState.evolvedThisLayer = false;
+        this.level = createLevel(tr.nextLayer, this.playerState);
+        this._centerCamera(true);
+        audio.playPortalCue();
+      }
+      return true;
+    }
+    // fade in
+    if (tr.t >= 1) {
+      this.transition = null;
+      return false;
+    }
+    // 淡入期间仍可轻微更新视觉，但冻结玩法
+    return true;
+  }
+
+  _beginLayerTransition(nextLayer) {
+    if (this.transition) return;
+    this.transition = {
+      phase: "out",
+      t: 0,
+      duration: 0.7,
+      nextLayer,
+    };
+    audio.playPortalCue();
   }
 
   _resolveNucleusCombat() {
@@ -403,8 +474,7 @@ export class Game {
     if (dist < level.portal.r) {
       const next = level.layerIndex + 1;
       if (next < LAYERS.length) {
-        this.playerState.evolvedThisLayer = false;
-        this.start(next, false);
+        this._beginLayerTransition(next);
       }
     }
   }

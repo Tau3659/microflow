@@ -831,15 +831,15 @@ export class Renderer {
       for (let i = 0; i < 3; i += 1) {
         ctx.beginPath();
         ctx.strokeStyle = open
-          ? hexToRgba("#3ecfb0", 0.6 - i * 0.15)
-          : "rgba(232,244,242,0.18)";
+          ? hexToRgba("#3ecfb0", 0.55 - i * 0.14)
+          : "rgba(232,244,242,0.14)";
         ctx.lineWidth = 2;
         ctx.ellipse(0, 0, r * (1 + i * 0.2), r * (0.55 + i * 0.08), 0, 0, Math.PI * 2);
         ctx.stroke();
       }
       if (open) {
         const g = ctx.createRadialGradient(0, 0, 2, 0, 0, r);
-        g.addColorStop(0, "rgba(62,207,176,0.35)");
+        g.addColorStop(0, "rgba(62,207,176,0.28)");
         g.addColorStop(1, "rgba(62,207,176,0)");
         ctx.fillStyle = g;
         ctx.beginPath();
@@ -847,17 +847,84 @@ export class Renderer {
         ctx.fill();
       }
       ctx.restore();
-      // 开启时用向上箭头符号形提示，无文字
-      if (open) {
-        ctx.beginPath();
-        ctx.fillStyle = hexToRgba("#3ecfb0", 0.85);
-        ctx.moveTo(x, y - r - 10);
-        ctx.lineTo(x - 8, y - r + 4);
-        ctx.lineTo(x + 8, y - r + 4);
-        ctx.closePath();
-        ctx.fill();
-      }
     });
+  }
+
+  /** 屏幕边缘弱提示：下一层入口方向（传送门开启时） */
+  drawPortalEdgeHint(portal, camera, open) {
+    if (!portal || !open) return;
+    const sx = portal.x - camera.x;
+    const sy = portal.y - camera.y;
+    const margin = 28;
+    const onScreen =
+      sx > margin && sy > margin && sx < this.w - margin && sy < this.h - margin;
+    if (onScreen) return;
+
+    const cx = this.w * 0.5;
+    const cy = this.h * 0.5;
+    const dx = sx - cx;
+    const dy = sy - cy;
+    const ang = Math.atan2(dy, dx);
+    const edgePad = 18;
+    // 射线与屏幕矩形边界交点
+    const cos = Math.cos(ang);
+    const sin = Math.sin(ang);
+    const tx = cos > 0 ? (this.w - edgePad - cx) / cos : cos < 0 ? (edgePad - cx) / cos : Infinity;
+    const ty = sin > 0 ? (this.h - edgePad - cy) / sin : sin < 0 ? (edgePad - cy) / sin : Infinity;
+    const t = Math.min(Math.abs(tx), Math.abs(ty));
+    const ex = cx + cos * t;
+    const ey = cy + sin * t;
+    const pulse = 0.35 + Math.sin(this.time * 3.2) * 0.12;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(ex, ey);
+    ctx.rotate(ang);
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = hexToRgba("#3ecfb0", 0.55);
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(-6, -8);
+    ctx.lineTo(-6, 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.strokeStyle = hexToRgba("#3ecfb0", 0.35);
+    ctx.lineWidth = 1.5;
+    ctx.arc(-2, 0, 14, -0.9, 0.9);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawTransition(alpha, accent = "#3ecfb0") {
+    if (alpha <= 0) return;
+    const ctx = this.ctx;
+    const a = Math.max(0, Math.min(1, alpha));
+    ctx.save();
+    ctx.fillStyle = `rgba(3, 16, 22, ${a * 0.92})`;
+    ctx.fillRect(0, 0, this.w, this.h);
+    const g = ctx.createRadialGradient(
+      this.w * 0.5,
+      this.h * 0.45,
+      8,
+      this.w * 0.5,
+      this.h * 0.5,
+      Math.max(this.w, this.h) * 0.55
+    );
+    g.addColorStop(0, hexToRgba(accent, 0.35 * a));
+    g.addColorStop(0.45, hexToRgba(accent, 0.12 * a));
+    g.addColorStop(1, "rgba(3,16,22,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, this.w, this.h);
+    // 漂浮微粒
+    for (let i = 0; i < 24; i += 1) {
+      const px = ((i * 97 + this.time * 40 * (1 + (i % 3))) % (this.w + 40)) - 20;
+      const py = ((i * 53 + this.time * 28) % (this.h + 40)) - 20;
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba(accent, 0.15 * a * (0.4 + (i % 4) * 0.15));
+      ctx.arc(px, py, 1.2 + (i % 3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   drawParticles(particles, camera, world) {
@@ -873,7 +940,7 @@ export class Renderer {
     }
   }
 
-  render(level, camera, canEvolve, portalOpen) {
+  render(level, camera, canEvolve, portalOpen, transitionAlpha = 0) {
     this.time += 0.016;
     const p = level.player;
     const world = level.world;
@@ -905,5 +972,9 @@ export class Renderer {
     for (const c of level.creatures) this.drawCreature(c, camera, world);
     this.drawCreature(level.player, camera, world);
     this.drawParticles(level.particles, camera, world);
+    this.drawPortalEdgeHint(level.portal, camera, portalOpen);
+    if (transitionAlpha > 0) {
+      this.drawTransition(transitionAlpha, level.layer?.accent || "#3ecfb0");
+    }
   }
 }
