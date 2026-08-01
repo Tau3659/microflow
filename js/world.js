@@ -153,9 +153,11 @@ export function createLevel(layerIndex, playerState) {
   // 限制普通攻击性生物数量，随层级缓增，突出 Boss
   enforceHostileCap(creatures, layer);
 
-  const bossPos = awayFrom(spawn.x, spawn.y, 480);
-  const boss = createBoss(bossPos.x, bossPos.y, layer);
-  creatures.push(boss);
+  // 第一层不生成 Boss
+  if (layer.hasBoss !== false && layerIndex > 0) {
+    const bossPos = awayFrom(spawn.x, spawn.y, 480);
+    creatures.push(createBoss(bossPos.x, bossPos.y, layer));
+  }
 
   const { ghosts, nextLayer } = createGhostLayer(layerIndex);
   const deepField = createDeepField(layer, nextLayer);

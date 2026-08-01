@@ -463,6 +463,8 @@ export function getLayer(depth = 0) {
     normalCount: Math.min(22, 10 + Math.floor(index * 1.2) + cycle),
     temperWeights: { passive, hostile, skittish },
     maxHostileNormals,
+    /** 第一层无 Boss、无攻击性 NPC */
+    hasBoss: index > 0,
     requiredEvolution: Math.min(EVOLUTIONS.length - 1, Math.floor(index / 2)),
     morphPool: theme.morphPool,
     speciesPool,
