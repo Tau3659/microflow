@@ -1,4 +1,4 @@
-import { EVOLUTIONS, PLAYER } from "./config.js";
+import { getEvolution, PLAYER } from "./config.js";
 import {
   updatePlayer,
   updateEnemy,
@@ -143,8 +143,11 @@ export class Game {
   }
 
   _canEvolve() {
-    const evo = EVOLUTIONS[this.level.player.evolutionId];
-    return this.level.points >= evo.pointsToEvolve && evo.pointsToEvolve !== Infinity;
+    const evo = getEvolution(this.level.player.evolutionId);
+    return (
+      evo.pointsToEvolve !== Infinity &&
+      this.level.points >= evo.pointsToEvolve
+    );
   }
 
   _portalOpen() {
@@ -331,9 +334,7 @@ export class Game {
     const player = level.player;
     if (player.evolutionTween) return;
     const next = player.evolutionId + 1;
-    if (next >= EVOLUTIONS.length) return;
-
-    const evo = EVOLUTIONS[next];
+    const evo = getEvolution(next);
     beginEvolution(player, next);
     level.points = 0;
     level.evolvedThisLayer = true;

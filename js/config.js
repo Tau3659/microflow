@@ -18,10 +18,8 @@ export const SCALE = {
   ghost: 22,
 };
 
-/** 进化形态：原核 → 真核单细胞 → 多细胞 → 复杂多细胞 → 病毒聚合体
- *  半径几乎恒定；complexity / 核 / 节 / 刺突等随级升高
- */
-export const EVOLUTIONS = [
+/** 基础进化链；其后由 getEvolution 无限延伸，外观持续变化 */
+const EVO_BASE = [
   {
     id: 0,
     name: "原核细胞",
@@ -109,7 +107,7 @@ export const EVOLUTIONS = [
     color: "#e07a6a",
     coreColor: "#ffc4bc",
     membrane: "#8a3a3a",
-    pointsToEvolve: Infinity,
+    pointsToEvolve: 96,
     complexity: 5,
     mouths: 1,
     spikes: 14,
@@ -119,6 +117,62 @@ export const EVOLUTIONS = [
     capsidFacets: 8,
   },
 ];
+
+const EVO_MORPH_CYCLE = [
+  MORPH.PHAGE,
+  MORPH.COLONY,
+  MORPH.VIRUS,
+  MORPH.COCCUS,
+  MORPH.SPIRILLUM,
+  MORPH.BACILLUS,
+  MORPH.COLONY,
+  MORPH.VIRUS,
+];
+
+/**
+ * 任意等级进化形态（可持续升级）
+ * 体型基本恒定，靠形态轮换与结构复杂度持续变化
+ */
+export function getEvolution(id = 0) {
+  const n = Math.max(0, id | 0);
+  if (n < EVO_BASE.length) return { ...EVO_BASE[n] };
+
+  const cycle = n - EVO_BASE.length;
+  const morph = EVO_MORPH_CYCLE[cycle % EVO_MORPH_CYCLE.length];
+  const tier = n + 1;
+  const isColony = morph === MORPH.COLONY;
+  const isVirus = morph === MORPH.VIRUS;
+  const isPhage = morph === MORPH.PHAGE;
+  const isRod = morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM;
+
+  return {
+    id: n,
+    name: `深海聚合·${tier}`,
+    morph,
+    radius: SCALE.player[4],
+    segmentCount: Math.min(22, 11 + Math.floor(cycle * 0.7) + (isRod ? 2 : 0)),
+    nuclei: Math.min(12, 5 + Math.floor((cycle + 1) / 2)),
+    color: "#3ecfb0",
+    coreColor: "#9be8d6",
+    membrane: "#1a6b62",
+    pointsToEvolve: Math.round(96 + cycle * 26 + Math.pow(cycle, 1.3) * 10),
+    complexity: Math.min(24, 5 + cycle),
+    mouths: 1,
+    flagella: isRod ? Math.min(7, 2 + Math.floor(cycle / 2)) : isPhage ? 1 : 0,
+    cilia: morph === MORPH.COCCUS || isColony || cycle % 3 === 0,
+    colonyCells: isColony ? Math.min(20, 8 + cycle) : 0,
+    spikes: isVirus || isPhage ? Math.min(32, 12 + cycle * 2) : 0,
+    organelles: Math.min(14, 6 + Math.floor(cycle / 2)),
+    membraneLayers: Math.min(3, 2 + Math.floor(cycle / 4)),
+    vacuoles: Math.min(7, 2 + Math.floor(cycle / 3)),
+    cellBridges: isColony,
+    capsidFacets: isVirus || isPhage ? Math.min(12, 8 + Math.floor(cycle / 3)) : 0,
+    legs: isPhage ? Math.min(6, 3 + Math.floor(cycle / 3)) : 0,
+  };
+}
+
+/** 兼容：前若干基础形态快照 */
+export const EVOLUTIONS = EVO_BASE.map((e) => ({ ...e }));
 
 /**
  * 稀有生物能力（参照真实微生物结构/功能）
@@ -156,6 +210,14 @@ export const ABILITIES = {
     dropRate: 0.2,
     color: "#e8c27a",
     minLayer: 0,
+  },
+  polyMouth: {
+    id: "polyMouth",
+    name: "裂口",
+    maxStacks: 3,
+    dropRate: 0.07,
+    color: "#ff9a6a",
+    minLayer: 1,
   },
   capsule: {
     id: "capsule",
@@ -428,19 +490,55 @@ export function getLayer(depth = 0) {
   const maxHostileNormals =
     index === 0 ? 0 : Math.min(6, 1 + Math.floor(index / 2) + cycle);
   const bossBase = theme.boss;
-  const bossNuclei = Math.min(8, 2 + Math.floor(complexity / 2));
+  // 第 5 层之后（index >= 5）：精英 Boss，体型/核/结构逐级加压
+  const elite = index >= 5;
+  const eliteTier = elite ? index - 4 : 0;
+  const bossNuclei = elite
+    ? Math.min(14, 5 + eliteTier + Math.floor(eliteTier / 2))
+    : Math.min(8, 2 + Math.floor(complexity / 2));
+  const bossRadius = elite
+    ? Math.min(52, SCALE.boss + 3 + eliteTier * 1.8)
+    : SCALE.boss;
+  const eliteMorphs = [
+    MORPH.PHAGE,
+    MORPH.VIRUS,
+    MORPH.COLONY,
+    MORPH.SPIRILLUM,
+    MORPH.BACILLUS,
+    MORPH.COCCUS,
+  ];
+  const bossMorph = elite
+    ? eliteMorphs[(index + eliteTier) % eliteMorphs.length]
+    : bossBase.morph;
   const boss = {
     ...bossBase,
-    name: cycle > 0 ? `${bossBase.name}·${cycle + 1}` : bossBase.name,
-    radius: SCALE.boss,
+    name: elite
+      ? `深渊${bossBase.name}·${eliteTier}`
+      : cycle > 0
+        ? `${bossBase.name}·${cycle + 1}`
+        : bossBase.name,
+    morph: bossMorph,
+    radius: bossRadius,
     nuclei: bossNuclei,
-    flagella: Math.min(8, (bossBase.flagella || 0) + Math.floor(complexity / 3)),
-    spikes: Math.min(24, (bossBase.spikes || 0) + complexity + cycle * 2),
-    colonyCells: Math.min(
-      16,
-      (bossBase.colonyCells || 0) + Math.floor(complexity / 2) + cycle
+    elite: elite,
+    eliteTier,
+    flagella: Math.min(
+      10,
+      (bossBase.flagella || 0) + Math.floor(complexity / 3) + (elite ? eliteTier : 0)
     ),
-    cilia: !!bossBase.cilia || complexity >= 4,
+    spikes: Math.min(
+      36,
+      (bossBase.spikes || 0) + complexity + cycle * 2 + (elite ? eliteTier * 3 : 0)
+    ),
+    colonyCells: Math.min(
+      22,
+      (bossBase.colonyCells || 0) +
+        Math.floor(complexity / 2) +
+        cycle +
+        (elite && bossMorph === MORPH.COLONY ? 4 + eliteTier : 0)
+    ),
+    cilia: !!bossBase.cilia || complexity >= 4 || (elite && bossMorph === MORPH.COCCUS),
+    aggroBoost: elite ? 1 + eliteTier * 0.06 : 1,
   };
 
   // 混入更深主题物种，随轮次丰富
@@ -465,7 +563,7 @@ export function getLayer(depth = 0) {
     maxHostileNormals,
     /** 第一层无 Boss、无攻击性 NPC */
     hasBoss: index > 0,
-    requiredEvolution: Math.min(EVOLUTIONS.length - 1, Math.floor(index / 2)),
+    requiredEvolution: Math.floor(index / 2),
     morphPool: theme.morphPool,
     speciesPool,
     complexity,

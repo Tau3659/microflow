@@ -1,6 +1,6 @@
 import {
   BOSS_AI,
-  EVOLUTIONS,
+  getEvolution,
   MORPH,
   PLAYER,
   PLAYER_LOOK,
@@ -11,7 +11,11 @@ import {
   WARNING,
   WORLD,
 } from "./config.js";
-import { applyAbilitiesToNewPlayer, recomputeAbilityMods, syncPlayerMouth } from "./abilities.js";
+import {
+  applyAbilitiesToNewPlayer,
+  bindMouthSync,
+  recomputeAbilityMods,
+} from "./abilities.js";
 
 let nextId = 1;
 
@@ -197,12 +201,14 @@ function makeMouths(morph, radius, count = 1) {
       }
     }
   } else if (morph === MORPH.PHAGE) {
-    // 条形结构：注射端为一端
-    if (n === 1) {
-      mouths.push({ mouthAngle: Math.PI / 2, mouthDist: 1.05, mouthRadius: baseR });
-    } else {
-      mouths.push({ mouthAngle: Math.PI / 2, mouthDist: 1.05, mouthRadius: baseR });
+    // 条形结构：注射端为一端；多嘴时两端 + 侧口
+    mouths.push({ mouthAngle: Math.PI / 2, mouthDist: 1.05, mouthRadius: baseR });
+    if (n >= 2) {
       mouths.push({ mouthAngle: -Math.PI / 2, mouthDist: 0.85, mouthRadius: baseR * 0.85 });
+    }
+    for (let i = 2; i < n; i += 1) {
+      const a = (Math.PI * 2 * (i - 2)) / Math.max(1, n - 1) + Math.PI / 4;
+      mouths.push({ mouthAngle: a, mouthDist: 0.78, mouthRadius: baseR * 0.75 });
     }
   } else if (morph === MORPH.COCCUS || morph === MORPH.VIRUS || morph === MORPH.COLONY) {
     if (n === 1) {
@@ -238,9 +244,26 @@ function makeMouths(morph, radius, count = 1) {
   };
 }
 
-function mouthBundle(morph, radius, count = 1) {
+export function mouthBundle(morph, radius, count = 1) {
   return makeMouths(morph, radius, count);
 }
+
+/** 按形态 + 裂口技能刷新玩家嘴数量与位置 */
+export function syncPlayerMouth(player) {
+  const scale = player.mods?.mouthScale || 1;
+  const extra = player.mods?.extraMouths ?? player.abilities?.polyMouth ?? 0;
+  const count = Math.max(1, 1 + (extra | 0));
+  const bundle = mouthBundle(player.morph, player.radius, count);
+  player.mouths = bundle.mouths.map((m) => ({
+    ...m,
+    mouthRadius: Math.max(3.5, m.mouthRadius * scale),
+  }));
+  player.mouthAngle = player.mouths[0].mouthAngle;
+  player.mouthDist = player.mouths[0].mouthDist;
+  player.mouthRadius = player.mouths[0].mouthRadius;
+}
+
+bindMouthSync(syncPlayerMouth);
 
 /** 体型越大速度越慢 */
 export function speedScaleForRadius(radius) {
@@ -314,6 +337,7 @@ function visualFromEvo(evo, { playerColors = false } = {}) {
     vacuoles: evo.vacuoles || 0,
     cellBridges: !!evo.cellBridges,
     capsidFacets: evo.capsidFacets || 0,
+    legs: evo.legs || 0,
   };
 }
 
@@ -325,13 +349,13 @@ function applyPlayerPalette(target) {
 }
 
 export function createPlayer(x, y, evolutionId = 0, savedAbilities = null) {
-  const evo = EVOLUTIONS[evolutionId];
+  const evo = getEvolution(evolutionId);
   const spacing = Math.max(PLAYER.segmentSpacing * 0.5, evo.radius * 0.32);
   const segments = [];
   for (let i = 0; i < evo.segmentCount; i += 1) {
     segments.push({ x: x - i * spacing, y });
   }
-  const mouth = mouthBundle(evo.morph, evo.radius, 1);
+  const mouth = mouthBundle(evo.morph, evo.radius, evo.mouths || 1);
   const player = {
     id: nextId++,
     kind: "player",
@@ -343,6 +367,7 @@ export function createPlayer(x, y, evolutionId = 0, savedAbilities = null) {
     evolutionId,
     radius: evo.radius,
     ...visualFromEvo(evo, { playerColors: true }),
+    legs: evo.legs || 0,
     ...mouth,
     segments,
     nuclei: makeNuclei(evo.nuclei, evo.radius, evo.morph),
@@ -369,12 +394,12 @@ export function createPlayer(x, y, evolutionId = 0, savedAbilities = null) {
 
 /** 立即定格到目标进化（过渡结束时调用） */
 export function applyEvolution(player, evolutionId) {
-  const evo = EVOLUTIONS[evolutionId];
+  const evo = getEvolution(evolutionId);
   player.evolutionId = evolutionId;
   player.radius = evo.radius;
   Object.assign(player, visualFromEvo(evo, { playerColors: true }));
+  player.legs = evo.legs || 0;
   applyPlayerPalette(player);
-  Object.assign(player, mouthBundle(evo.morph, evo.radius, 1));
   player.nuclei = makeNuclei(evo.nuclei, evo.radius, evo.morph);
   recomputeAbilityMods(player);
   syncPlayerMouth(player);
@@ -394,11 +419,15 @@ export function applyEvolution(player, evolutionId) {
 
 /** 开始渐进进化：先长大，再逐渐变成新结构 */
 export function beginEvolution(player, evolutionId) {
-  const to = EVOLUTIONS[evolutionId];
+  const to = getEvolution(evolutionId);
   if (!to) return;
   applyPlayerPalette(player);
   const fromVisual = applyPlayerPalette(snapshotVisual(player));
   const toVisual = applyPlayerPalette(visualFromEvo(to, { playerColors: true }));
+  const mouthCount = Math.max(
+    1,
+    (to.mouths || 1) + (player.abilities?.polyMouth || 0)
+  );
   player.evolutionTween = {
     fromId: player.evolutionId,
     toId: evolutionId,
@@ -409,7 +438,7 @@ export function beginEvolution(player, evolutionId) {
     fromVisual,
     toVisual,
     fromMouths: (player.mouths || []).map((m) => ({ ...m })),
-    toMouths: mouthBundle(to.morph, to.radius, 1).mouths,
+    toMouths: mouthBundle(to.morph, to.radius, mouthCount).mouths,
     targetNuclei: to.nuclei,
     targetSegments: to.segmentCount,
   };
@@ -449,19 +478,24 @@ export function updateEvolution(player, dt) {
   player.capsidFacets = Math.round(
     lerp(tw.fromVisual.capsidFacets || 0, tw.toVisual.capsidFacets || 0, sMorph)
   );
+  player.legs = Math.round(lerp(tw.fromVisual.legs || 0, tw.toVisual.legs || 0, sMorph));
   player.morph = sMorph < 0.42 ? tw.fromVisual.morph : tw.toVisual.morph;
 
-  // 玩家始终单嘴，过渡中插值位置与尺寸
-  const a = tw.fromMouths[0] || { mouthAngle: 0, mouthDist: 1, mouthRadius: 6 };
-  const b = tw.toMouths[0] || a;
+  // 多嘴过渡：数量向目标靠拢并插值
   const mouthScale = player.mods?.mouthScale || 1;
-  player.mouths = [
-    {
+  const mouthCount = Math.max(tw.fromMouths.length, tw.toMouths.length, 1);
+  player.mouths = [];
+  for (let i = 0; i < mouthCount; i += 1) {
+    const a =
+      tw.fromMouths[i] ||
+      tw.fromMouths[0] || { mouthAngle: 0, mouthDist: 1, mouthRadius: 6 };
+    const b = tw.toMouths[i] || tw.toMouths[tw.toMouths.length - 1] || a;
+    player.mouths.push({
       mouthAngle: lerp(a.mouthAngle, b.mouthAngle, sMorph),
       mouthDist: lerp(a.mouthDist, b.mouthDist, sMorph),
       mouthRadius: lerp(a.mouthRadius, b.mouthRadius, sGrow) * mouthScale,
-    },
-  ];
+    });
+  }
   player.mouthAngle = player.mouths[0].mouthAngle;
   player.mouthDist = player.mouths[0].mouthDist;
   player.mouthRadius = player.mouths[0].mouthRadius;
@@ -625,8 +659,8 @@ export function provokeCreature(creature) {
 }
 
 export function createNormal(x, y, layer, evolutionFloor = 0) {
-  const tier = clamp(evolutionFloor + Math.floor(Math.random() * 2), 0, EVOLUTIONS.length - 1);
-  const evo = EVOLUTIONS[tier];
+  const tier = Math.max(0, evolutionFloor + Math.floor(Math.random() * 2));
+  const evo = getEvolution(tier);
   const speciesId = pick(layer.speciesPool || ["ecoli"]);
   const species = SPECIES[speciesId] || SPECIES.ecoli;
   const morph = species.morph || pick(layer.morphPool || [evo.morph]);
@@ -719,24 +753,35 @@ export function createBoss(x, y, layer) {
   const speciesId = b.species || "ecoli";
   const species = SPECIES[speciesId] || {};
   const morph = b.morph || species.morph || MORPH.BACILLUS;
-  const complexity = Math.min(16, (layer.complexity || layer.id || 0) + 3);
-  const radius = SCALE.boss;
-  const segCount = Math.min(16, 8 + Math.floor(complexity / 2));
+  const elite = !!b.elite || (layer.id || 0) >= 5;
+  const eliteTier = b.eliteTier || Math.max(0, (layer.id || 0) - 4);
+  const complexity = Math.min(
+    28,
+    (layer.complexity || layer.id || 0) + 3 + (elite ? eliteTier * 2 : 0)
+  );
+  const radius = b.radius || SCALE.boss;
+  const segCount = Math.min(
+    24,
+    8 + Math.floor(complexity / 2) + (elite ? eliteTier : 0)
+  );
   const segments = [];
   for (let i = 0; i < segCount; i += 1) {
-    segments.push({ x: x - i * Math.max(7, radius * 0.24), y });
+    segments.push({ x: x - i * Math.max(6, radius * 0.22), y });
   }
-  const nuclei = Math.min(8, b.nuclei || 3);
+  const nuclei = Math.min(14, b.nuclei || 3);
+  const mouthCount = Math.min(5, 1 + Math.floor(nuclei / 2) + (elite ? 1 : 0));
   return {
     id: nextId++,
     kind: "boss",
     name: b.name,
     species: speciesId,
+    elite,
+    eliteTier,
     x,
     y,
     homeX: x,
     homeY: y,
-    territoryRadius: BOSS_AI.territoryRadius,
+    territoryRadius: BOSS_AI.territoryRadius * (elite ? 1 + eliteTier * 0.04 : 1),
     aiState: "patrol",
     vx: 0,
     vy: 0,
@@ -744,34 +789,42 @@ export function createBoss(x, y, layer) {
     radius,
     morph,
     complexity,
-    curve: species.curve || 0,
-    aspect: species.aspect || 1.2,
-    elongate: !!species.elongate,
-    hollow: !!species.hollow,
-    envelope: !!species.envelope,
-    legs: Math.min(6, (species.legs || 3) + Math.floor(complexity / 5)),
-    color: b.color,
-    coreColor: "#ffe0dc",
+    curve: species.curve || (elite ? 0.2 + (eliteTier % 3) * 0.12 : 0),
+    aspect: species.aspect || (elite ? 1.15 + (eliteTier % 4) * 0.08 : 1.2),
+    elongate: !!species.elongate || (elite && morph === MORPH.SPIRILLUM),
+    hollow: !!species.hollow || (elite && morph === MORPH.COLONY && eliteTier % 2 === 0),
+    envelope: !!species.envelope || (elite && morph === MORPH.VIRUS),
+    legs: Math.min(
+      8,
+      (species.legs || (morph === MORPH.PHAGE ? 3 : 2)) +
+        Math.floor(complexity / 5) +
+        (elite ? Math.floor(eliteTier / 2) : 0)
+    ),
+    color: elite && eliteTier >= 3 ? "#ff4a3a" : b.color,
+    coreColor: elite ? "#ffe8a0" : "#ffe0dc",
     membrane: b.membrane || "#4a2020",
     flagella: b.flagella || 0,
     spikes: b.spikes || 0,
     colonyCells: b.colonyCells || 0,
     cilia: !!b.cilia,
-    organelles: Math.min(10, 2 + complexity),
+    organelles: Math.min(16, 2 + complexity),
     membraneLayers: Math.min(3, 1 + Math.floor(complexity / 3)),
-    vacuoles: Math.min(6, Math.max(1, Math.floor(complexity / 2))),
+    vacuoles: Math.min(8, Math.max(1, Math.floor(complexity / 2))),
     cellBridges: morph === MORPH.COLONY,
-    capsidFacets: morph === MORPH.VIRUS || morph === MORPH.PHAGE ? 8 : 0,
+    capsidFacets:
+      morph === MORPH.VIRUS || morph === MORPH.PHAGE
+        ? Math.min(14, 8 + (elite ? eliteTier : 0))
+        : 0,
     segments,
     nuclei: makeNuclei(nuclei, radius, morph),
-    ...mouthBundle(morph, radius, Math.min(4, 1 + Math.floor(nuclei / 2))),
+    ...mouthBundle(morph, radius, mouthCount),
     pulse: 0,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
     temper: TEMPER.HOSTILE,
     aggressive: true,
     warning: true,
-    aggro: 1,
+    aggro: (b.aggroBoost || 1) * (elite ? 1.05 + eliteTier * 0.03 : 1),
     provokeFlash: 0,
     panicTimer: 0,
     nucleusIframes: 0,

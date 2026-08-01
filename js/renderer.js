@@ -714,6 +714,23 @@ export class Renderer {
         ctx.stroke();
         break;
       }
+      case "polyMouth": {
+        // 裂口：多张小嘴，暗示嘴数量+1
+        for (let i = 0; i < 3; i += 1) {
+          const a = (Math.PI * 2 * i) / 3 - Math.PI / 2;
+          const cx = Math.cos(a) * r * 0.42;
+          const cy = Math.sin(a) * r * 0.42;
+          ctx.beginPath();
+          ctx.fillStyle = hexToRgba(color, 0.9);
+          ctx.ellipse(cx, cy, r * 0.32, r * 0.2, a, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.fillStyle = "rgba(3,16,22,0.7)";
+          ctx.ellipse(cx, cy, r * 0.16, r * 0.1, a, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
       case "capsule": {
         // 荚膜：双层软膜，暗示减伤
         ctx.beginPath();

@@ -1,5 +1,11 @@
 import { ABILITIES } from "./config.js";
 
+/** 由 creature.js 注入，避免循环依赖 */
+let _syncPlayerMouth = null;
+export function bindMouthSync(fn) {
+  _syncPlayerMouth = fn;
+}
+
 export function emptyAbilityCounts() {
   const counts = {};
   for (const id of Object.keys(ABILITIES)) counts[id] = 0;
@@ -69,6 +75,7 @@ export function recomputeAbilityMods(player) {
   const cilia = a.cilia || 0;
   const cellWall = a.cellWall || 0;
   const buccal = a.buccal || 0;
+  const polyMouth = a.polyMouth || 0;
   const capsule = a.capsule || 0;
   const gas = a.gasVacuole || 0;
   const chroma = a.chromatophore || 0;
@@ -81,6 +88,7 @@ export function recomputeAbilityMods(player) {
     turn: 1 + cilia * 0.08,
     boostDrain: 1 / (1 + gas * 0.12),
     mouthScale: 1 + buccal * 0.08,
+    extraMouths: polyMouth,
     eatBonus: spike * 1.1,
     hurtCooldown: 1 + cellWall * 0.18 + capsule * 0.1,
     proteinValue: 1 + plasmid * 0.15,
@@ -95,8 +103,7 @@ export function recomputeAbilityMods(player) {
   player.vacuoles = Math.max(player.vacuoles || 0, gas);
   if (capsule > 0) player.capsule = capsule;
 
-  // 刷新唯一嘴的尺寸
-  syncPlayerMouth(player);
+  _syncPlayerMouth?.(player);
   return player.mods;
 }
 
@@ -108,32 +115,6 @@ export function grantAbility(player, abilityId) {
   player.abilities[abilityId] = (player.abilities[abilityId] || 0) + 1;
   recomputeAbilityMods(player);
   return true;
-}
-
-export function syncPlayerMouth(player) {
-  const scale = player.mods?.mouthScale || 1;
-  const base = Math.max(4, player.radius * 0.32 * scale);
-  const morph = player.morph;
-  let angle = 0;
-  let dist = 0.02;
-  if (morph === "bacillus") {
-    angle = 0;
-    dist = 1.12; // 条形：一端
-  } else if (morph === "spirillum") {
-    angle = 0;
-    dist = 1.08;
-  } else if (morph === "coccus" || morph === "colony" || morph === "virus") {
-    angle = 0;
-    dist = 0.02; // 圆形：中心
-  } else if (morph === "phage") {
-    angle = Math.PI / 2;
-    dist = 1.05; // 注射端
-  }
-  const mouth = { mouthAngle: angle, mouthDist: dist, mouthRadius: base };
-  player.mouths = [mouth];
-  player.mouthAngle = angle;
-  player.mouthDist = dist;
-  player.mouthRadius = base;
 }
 
 export function applyAbilitiesToNewPlayer(player, savedCounts) {
