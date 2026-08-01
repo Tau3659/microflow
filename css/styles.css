@@ -604,6 +604,14 @@ body:-webkit-full-screen {
   stroke: rgba(232, 194, 122, 0.55);
 }
 
+.boost-btn.locked {
+  opacity: 0.55;
+}
+
+.boost-btn.locked .boost-ring-fill {
+  stroke: rgba(232, 194, 122, 0.4);
+}
+
 .boost-chevron {
   position: relative;
   z-index: 1;

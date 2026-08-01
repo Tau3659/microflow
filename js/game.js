@@ -24,6 +24,7 @@ import {
   maintainPickups,
   ecosystemProtein,
 } from "./world.js";
+import { grantAbility } from "./abilities.js";
 import { Renderer } from "./renderer.js";
 import { Input } from "./input.js";
 
@@ -44,6 +45,7 @@ export class Game {
       evolutionId: 0,
       points: 0,
       evolvedThisLayer: false,
+      abilities: null,
     };
     this.onStateChange = null;
   }
@@ -59,7 +61,12 @@ export class Game {
 
   start(layerIndex = 0, resetProgress = true) {
     if (resetProgress) {
-      this.playerState = { evolutionId: 0, points: 0, evolvedThisLayer: false };
+      this.playerState = {
+        evolutionId: 0,
+        points: 0,
+        evolvedThisLayer: false,
+        abilities: null,
+      };
     }
     this.level = createLevel(layerIndex, this.playerState);
     this.ended = false;
@@ -114,8 +121,9 @@ export class Game {
   _updateHud() {
     const player = this.level.player;
     this.hud.setInfo({
-      boostReady: (player.boostCharge ?? 0) >= 0.98 && player.boostTimer <= 0,
-      boosting: player.boostTimer > 0,
+      boostReady: !player.boostLocked && (player.boostCharge ?? 0) > 0.02,
+      boosting: !!player.boosting,
+      boostLocked: !!player.boostLocked,
       boostRatio: boostRingRatio(player),
     });
   }
@@ -148,7 +156,7 @@ export class Game {
       updateGhost(g, dt, level.world);
     }
 
-    this._collectPickups();
+    this._collectPickups(dt);
     this._npcEatProteins();
     this._checkProteinExhausted();
     this._resolveNucleusCombat();
@@ -159,6 +167,7 @@ export class Game {
     this.playerState.points = level.points;
     this.playerState.evolutionId = player.evolutionId;
     this.playerState.evolvedThisLayer = level.evolvedThisLayer;
+    this.playerState.abilities = { ...(player.abilities || {}) };
     this._centerCamera(false);
     this._updateHud();
 
@@ -172,31 +181,61 @@ export class Game {
     }
   }
 
-  _collectPickups() {
+  _collectPickups(dt = 0.016) {
     const level = this.level;
     const player = level.player;
     const world = level.world;
     const missing = player.nuclei.length - aliveNuclei(player).length;
+    const recoverNeed = player.mods?.recoverNeed || PLAYER.proteinPerNucleus;
+    const proteinValue = player.mods?.proteinValue || 1;
+    const magnet = player.mods?.proteinMagnet || 0;
 
     for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
       const p = level.proteins[i];
       p.phase += 0.05;
+      if (magnet > 0) {
+        const off = wrappedOffset(player.x, player.y, p.x, p.y, world);
+        if (off.dist < 40 + magnet && off.dist > 1) {
+          p.x -= (off.dx / off.dist) * magnet * 0.35;
+          p.y -= (off.dy / off.dist) * magnet * 0.35;
+        }
+      }
       if (!anyMouthTouchesPoint(player, p.x, p.y, p.r, world, 1)) continue;
 
       level.proteins.splice(i, 1);
+      const gained = p.value * proteinValue;
       level.proteinConsumed += p.value;
       spawnBurst(level, p.x, p.y, p.color, 4);
 
       if (missing > 0) {
-        player.recoverProgress = (player.recoverProgress || 0) + p.value;
-        if (player.recoverProgress >= PLAYER.proteinPerNucleus) {
-          player.recoverProgress -= PLAYER.proteinPerNucleus;
+        player.recoverProgress = (player.recoverProgress || 0) + gained;
+        if (player.recoverProgress >= recoverNeed) {
+          player.recoverProgress -= recoverNeed;
           if (restoreOneNucleus(player)) {
             spawnBurst(level, player.x, player.y, player.coreColor, 14);
           }
         }
       } else {
-        level.points += p.value;
+        level.points += gained;
+      }
+    }
+
+    // 稀有能力拾取
+    if (level.abilities?.length) {
+      for (let i = level.abilities.length - 1; i >= 0; i -= 1) {
+        const a = level.abilities[i];
+        a.phase += 0.06;
+        a.life -= dt;
+        if (a.life <= 0) {
+          level.abilities.splice(i, 1);
+          continue;
+        }
+        if (!anyMouthTouchesPoint(player, a.x, a.y, a.r, world, 3)) continue;
+        if (grantAbility(player, a.abilityId)) {
+          spawnBurst(level, a.x, a.y, a.color, 16);
+          spawnBurst(level, player.x, player.y, player.coreColor, 10);
+        }
+        level.abilities.splice(i, 1);
       }
     }
 
@@ -278,7 +317,14 @@ export class Game {
         for (const n of enemy.nuclei) {
           if (!n.alive) continue;
           const eN = nucleusWorldPos(enemy, n);
-          if (anyMouthTouchesNucleus(player, eN, world, PLAYER.eatRangeBonus)) {
+          if (
+          anyMouthTouchesNucleus(
+            player,
+            eN,
+            world,
+            PLAYER.eatRangeBonus + (player.mods?.eatBonus || 0)
+          )
+        ) {
             n.alive = false;
             spawnBurst(level, eN.x, eN.y, enemy.coreColor, 8);
             panicFlee(enemy, player, world);
@@ -311,7 +357,8 @@ export class Game {
         const pN = nucleusWorldPos(player, pn);
         if (anyMouthTouchesNucleus(enemy, pN, world, PLAYER.eatRangeBonus)) {
           pn.alive = false;
-          player.invuln = PLAYER.nucleusHurtCooldown;
+          player.invuln =
+            PLAYER.nucleusHurtCooldown * (player.mods?.hurtCooldown || 1);
           spawnBurst(level, pN.x, pN.y, "#e07a6a", 14);
           hit = true;
         }

@@ -22,9 +22,10 @@ const hud = {
   hide() {
     hudEl.classList.add("hidden");
   },
-  setInfo({ boostReady, boosting, boostRatio = 1 } = {}) {
-    boostBtn.classList.toggle("cooling", !boostReady && !boosting);
+  setInfo({ boostReady, boosting, boostLocked, boostRatio = 1 } = {}) {
+    boostBtn.classList.toggle("cooling", !!boostLocked || (!boostReady && !boosting));
     boostBtn.classList.toggle("boosting", !!boosting);
+    boostBtn.classList.toggle("locked", !!boostLocked);
     if (boostRingFill) {
       const ratio = Math.max(0, Math.min(1, boostRatio));
       boostRingFill.style.strokeDasharray = `${BOOST_RING_LEN}`;

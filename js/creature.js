@@ -4,10 +4,12 @@ import {
   MORPH,
   PLAYER,
   PLAYER_LOOK,
+  SPECIES,
   TEMPER,
   WARNING,
   WORLD,
 } from "./config.js";
+import { applyAbilitiesToNewPlayer, recomputeAbilityMods, syncPlayerMouth } from "./abilities.js";
 
 let nextId = 1;
 
@@ -330,15 +332,15 @@ function applyPlayerPalette(target) {
   return target;
 }
 
-export function createPlayer(x, y, evolutionId = 0) {
+export function createPlayer(x, y, evolutionId = 0, savedAbilities = null) {
   const evo = EVOLUTIONS[evolutionId];
   const spacing = Math.max(PLAYER.segmentSpacing * 0.5, evo.radius * 0.32);
   const segments = [];
   for (let i = 0; i < evo.segmentCount; i += 1) {
     segments.push({ x: x - i * spacing, y });
   }
-  const mouth = mouthBundle(evo.morph, evo.radius, evo.mouths || 1);
-  return {
+  const mouth = mouthBundle(evo.morph, evo.radius, 1);
+  const player = {
     id: nextId++,
     kind: "player",
     x,
@@ -353,19 +355,24 @@ export function createPlayer(x, y, evolutionId = 0) {
     segments,
     nuclei: makeNuclei(evo.nuclei, evo.radius, evo.morph),
     pulse: 0,
-    boostTimer: 0,
-    boostDurationActive: 0,
-    /** 0..1 加速能量，按下扣除，随后自动回复 */
+    /** 0..1 加速能量：按住消耗，松手或耗尽后回复 */
     boostCharge: 1,
-    boostLatch: false,
+    boostLocked: false,
+    boosting: false,
     invuln: 0,
     recoverProgress: 0,
     storedProtein: 0,
     bodyProtein: bodyProteinFor(evo.radius, "player"),
     evolutionTween: null,
     morphMix: 0,
+    abilities: null,
+    mods: null,
+    capsule: 0,
     alive: true,
   };
+  applyAbilitiesToNewPlayer(player, savedAbilities);
+  syncPlayerMouth(player);
+  return player;
 }
 
 /** 立即定格到目标进化（过渡结束时调用） */
@@ -375,8 +382,10 @@ export function applyEvolution(player, evolutionId) {
   player.radius = evo.radius;
   Object.assign(player, visualFromEvo(evo, { playerColors: true }));
   applyPlayerPalette(player);
-  Object.assign(player, mouthBundle(evo.morph, evo.radius, evo.mouths || 1));
+  Object.assign(player, mouthBundle(evo.morph, evo.radius, 1));
   player.nuclei = makeNuclei(evo.nuclei, evo.radius, evo.morph);
+  recomputeAbilityMods(player);
+  syncPlayerMouth(player);
   player.bodyProtein = bodyProteinFor(evo.radius, "player");
   player.recoverProgress = 0;
   player.evolutionTween = null;
@@ -408,7 +417,7 @@ export function beginEvolution(player, evolutionId) {
     fromVisual,
     toVisual,
     fromMouths: (player.mouths || []).map((m) => ({ ...m })),
-    toMouths: mouthBundle(to.morph, to.radius, to.mouths || 1).mouths,
+    toMouths: mouthBundle(to.morph, to.radius, 1).mouths,
     targetNuclei: to.nuclei,
     targetSegments: to.segmentCount,
   };
@@ -450,24 +459,20 @@ export function updateEvolution(player, dt) {
   );
   player.morph = sMorph < 0.42 ? tw.fromVisual.morph : tw.toVisual.morph;
 
-  // 嘴位插值 / 数量过渡
-  const fromM = tw.fromMouths;
-  const toM = tw.toMouths;
-  const mouthCount = Math.max(fromM.length, Math.round(lerp(fromM.length, toM.length, sMorph)));
-  const mouths = [];
-  for (let i = 0; i < mouthCount; i += 1) {
-    const a = fromM[Math.min(i, fromM.length - 1)];
-    const b = toM[Math.min(i, toM.length - 1)];
-    mouths.push({
+  // 玩家始终单嘴，过渡中插值位置与尺寸
+  const a = tw.fromMouths[0] || { mouthAngle: 0, mouthDist: 1, mouthRadius: 6 };
+  const b = tw.toMouths[0] || a;
+  const mouthScale = player.mods?.mouthScale || 1;
+  player.mouths = [
+    {
       mouthAngle: lerp(a.mouthAngle, b.mouthAngle, sMorph),
       mouthDist: lerp(a.mouthDist, b.mouthDist, sMorph),
-      mouthRadius: lerp(a.mouthRadius, b.mouthRadius, sGrow),
-    });
-  }
-  player.mouths = mouths;
-  player.mouthAngle = mouths[0].mouthAngle;
-  player.mouthDist = mouths[0].mouthDist;
-  player.mouthRadius = mouths[0].mouthRadius;
+      mouthRadius: lerp(a.mouthRadius, b.mouthRadius, sGrow) * mouthScale,
+    },
+  ];
+  player.mouthAngle = player.mouths[0].mouthAngle;
+  player.mouthDist = player.mouths[0].mouthDist;
+  player.mouthRadius = player.mouths[0].mouthRadius;
 
   // 细胞核随体型等比放大（相对过渡起点），后半段补齐数量
   if (!tw.baseNuclei) {
@@ -587,11 +592,16 @@ export function provokeCreature(creature) {
 export function createNormal(x, y, layer, evolutionFloor = 0) {
   const tier = clamp(evolutionFloor + Math.floor(Math.random() * 2), 0, EVOLUTIONS.length - 1);
   const evo = EVOLUTIONS[tier];
-  const morph = pick(layer.morphPool || [evo.morph]);
+  const speciesId = pick(layer.speciesPool || ["ecoli"]);
+  const species = SPECIES[speciesId] || SPECIES.ecoli;
+  const morph = species.morph || pick(layer.morphPool || [evo.morph]);
   // 同等级体型稳定：仅允许极小抖动，相对大小（含核）保持一致
   const radius = evo.radius * (0.96 + Math.random() * 0.08);
   const temper = rollTemper(layer.temperWeights);
   const look = paletteForTemper(temper, layer);
+  if (species.tint && temper !== TEMPER.HOSTILE) {
+    look.color = species.tint;
+  }
   const segments = [];
   const count = Math.max(3, evo.segmentCount - 1);
   const spacing = Math.max(7, evo.radius * 0.28);
@@ -599,12 +609,12 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     segments.push({ x: x - i * spacing, y });
   }
   const complexity = evo.complexity || 1;
-  const mouthCount = Math.max(1, Math.min(evo.mouths || 1, complexity >= 4 ? 2 : 1));
   return {
     id: nextId++,
     kind: "normal",
     temper,
     evolutionId: tier,
+    species: speciesId,
     x,
     y,
     vx: 0,
@@ -618,27 +628,35 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     membrane: look.membrane,
     aggressive: look.aggressive,
     warning: look.warning,
-    flagella:
-      morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM
-        ? Math.max(1, (evo.flagella || 1) + (complexity >= 3 ? 1 : 0))
-        : evo.flagella || 0,
-    spikes: morph === MORPH.VIRUS ? evo.spikes || 10 : evo.spikes || 0,
-    colonyCells: morph === MORPH.COLONY ? evo.colonyCells || 5 : evo.colonyCells || 0,
-    cilia: !!evo.cilia || (morph === MORPH.COCCUS && complexity >= 2),
+    flagella: species.flagella ?? (morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM ? 1 : 0),
+    spikes: species.spikes ?? (morph === MORPH.VIRUS ? 10 : 0),
+    colonyCells: species.colonyCells ?? (morph === MORPH.COLONY ? 5 : 0),
+    cilia: !!(species.cilia ?? (morph === MORPH.COCCUS && complexity >= 2)),
     organelles: evo.organelles || 0,
     membraneLayers: evo.membraneLayers || 1,
     vacuoles: evo.vacuoles || 0,
-    cellBridges: !!evo.cellBridges || (morph === MORPH.COLONY && complexity >= 3),
-    capsidFacets: evo.capsidFacets || 0,
+    cellBridges: !!(species.cellBridges ?? (morph === MORPH.COLONY && complexity >= 3)),
+    capsidFacets: species.capsidFacets || evo.capsidFacets || 0,
+    curve: species.curve || 0,
+    aspect: species.aspect || 1,
+    lobed: !!species.lobed,
+    elongate: !!species.elongate,
+    hollow: !!species.hollow,
+    collar: !!species.collar,
+    budding: !!species.budding,
+    envelope: !!species.envelope,
+    thin: !!species.thin,
+    chain: !!species.chain,
+    facets: species.facets || 0,
+    legs: species.legs || 2,
     segments,
     nuclei: makeNuclei(1, radius, morph),
-    ...mouthBundle(morph, radius, mouthCount),
+    ...mouthBundle(morph, radius, 1),
     pulse: Math.random() * 10,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
     aggro: temper === TEMPER.HOSTILE ? 0.85 + Math.random() * 0.25 : 0.4 + Math.random() * 0.3,
     provokeFlash: 0,
-    /** 非攻击时偶尔主动靠近玩家的几率 */
     curiousRate: temper === TEMPER.PASSIVE ? 0.34 : 0.22,
     mood: "idle",
     moodTimer: 0,
@@ -654,7 +672,9 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
 
 export function createBoss(x, y, layer) {
   const b = layer.boss;
-  const morph = b.morph || MORPH.BACILLUS;
+  const speciesId = b.species || "ecoli";
+  const species = SPECIES[speciesId] || {};
+  const morph = b.morph || species.morph || MORPH.BACILLUS;
   const complexity = Math.min(5, (layer.id || 0) + 3);
   const segments = [];
   for (let i = 0; i < 14; i += 1) {
@@ -664,6 +684,7 @@ export function createBoss(x, y, layer) {
     id: nextId++,
     kind: "boss",
     name: b.name,
+    species: speciesId,
     x,
     y,
     homeX: x,
@@ -676,6 +697,12 @@ export function createBoss(x, y, layer) {
     radius: b.radius,
     morph,
     complexity,
+    curve: species.curve || 0,
+    aspect: species.aspect || 1.2,
+    elongate: !!species.elongate,
+    hollow: !!species.hollow,
+    envelope: !!species.envelope,
+    legs: species.legs || 3,
     color: b.color,
     coreColor: "#ffe0dc",
     membrane: b.membrane || "#4a2020",
@@ -823,52 +850,63 @@ export function mouthTouchesPoint(mouth, x, y, radius, world, bonus = 0) {
   return off.dist < mouth.r + radius + bonus;
 }
 
-/** 当前进化等级可用的加速时长 */
-export function boostDurationFor(evolutionId) {
-  return PLAYER.boostDuration + (evolutionId || 0) * (PLAYER.boostDurationPerEvo || 0.24);
+/** 满条可按住加速的时长（随进化与气泡能力提升） */
+export function boostDurationFor(playerOrEvoId) {
+  const evoId =
+    typeof playerOrEvoId === "object" ? playerOrEvoId?.evolutionId || 0 : playerOrEvoId || 0;
+  const base = PLAYER.boostDuration + evoId * (PLAYER.boostDurationPerEvo || 0.28);
+  const drainMul =
+    typeof playerOrEvoId === "object" ? playerOrEvoId?.mods?.boostDrain || 1 : 1;
+  // boostDrain < 1 表示更耐用 → 等效时长更长
+  return base / Math.max(0.4, drainMul);
 }
 
-/** 圆环显示：加速中看剩余加速时间，否则看能量回复 */
 export function boostRingRatio(player) {
-  if (player.boostTimer > 0 && player.boostDurationActive > 0) {
-    return clamp(player.boostTimer / player.boostDurationActive, 0, 1);
-  }
   return clamp(player.boostCharge ?? 1, 0, 1);
 }
 
 export function updatePlayer(player, input, dt) {
-  if (player.boostTimer > 0) player.boostTimer -= dt;
   if (player.invuln > 0) player.invuln -= dt;
 
   const pressed = !!input.boostPressed;
-  if (!pressed) player.boostLatch = false;
-  if (pressed && !player.boostLatch) {
-    player.boostLatch = true;
-    // 能量回满后才能再次加速；按下一次扣光能量并进入加速
-    if (player.boostTimer <= 0 && (player.boostCharge ?? 0) >= 0.98) {
-      const dur = boostDurationFor(player.evolutionId);
-      player.boostDurationActive = dur;
-      player.boostTimer = dur;
+  const regen = 1 / Math.max(0.25, PLAYER.boostRegenTime || 1.85);
+  const maxHold = Math.max(0.35, boostDurationFor(player));
+  const drain = 1 / maxHold;
+
+  if (player.boostLocked) {
+    // 完全耗尽后的回复不可打断
+    player.boosting = false;
+    player.boostCharge = clamp((player.boostCharge || 0) + regen * dt, 0, 1);
+    if (player.boostCharge >= 1) player.boostLocked = false;
+  } else if (pressed && (player.boostCharge || 0) > 0) {
+    // 按住：立即停止回复并消耗；按时长扣进度
+    player.boosting = true;
+    player.boostCharge -= drain * dt;
+    if (player.boostCharge <= 0) {
       player.boostCharge = 0;
+      player.boosting = false;
+      player.boostLocked = true;
+    }
+  } else {
+    // 松手后自动回复（可被再次按下打断）
+    player.boosting = false;
+    if ((player.boostCharge || 0) < 1) {
+      player.boostCharge = clamp((player.boostCharge || 0) + regen * dt, 0, 1);
     }
   }
 
-  // 非加速时自动回复能量
-  if (player.boostTimer <= 0) {
-    const regen = 1 / Math.max(0.2, PLAYER.boostRegenTime || 1.6);
-    player.boostCharge = clamp((player.boostCharge || 0) + regen * dt, 0, 1);
-  }
-
-  const boosting = player.boostTimer > 0;
+  const boosting = !!player.boosting;
   const sizeScale = speedScaleForRadius(player.radius);
-  const speed = (boosting ? PLAYER.boostSpeed : PLAYER.baseSpeed) * sizeScale;
+  const speedMul = player.mods?.speed || 1;
+  const speed = (boosting ? PLAYER.boostSpeed : PLAYER.baseSpeed) * sizeScale * speedMul;
+  const turnMul = player.mods?.turn || 1;
 
   if (input.moving) {
     const targetAngle = Math.atan2(input.dirY, input.dirX);
     let delta = targetAngle - player.angle;
     while (delta > Math.PI) delta -= Math.PI * 2;
     while (delta < -Math.PI) delta += Math.PI * 2;
-    player.angle += delta * clamp(PLAYER.turnRate * dt, 0, 1);
+    player.angle += delta * clamp(PLAYER.turnRate * turnMul * dt, 0, 1);
 
     const mag = clamp(Math.hypot(input.dirX, input.dirY), 0, 1);
     const evolveSlow = player.evolutionTween ? 0.42 : 1;
@@ -886,7 +924,8 @@ export function updatePlayer(player, input, dt) {
 }
 
 function playerCruiseSpeed(player) {
-  return PLAYER.baseSpeed * speedScaleForRadius(player?.radius || PLAYER.speedRefRadius);
+  const mul = player?.mods?.speed || 1;
+  return PLAYER.baseSpeed * speedScaleForRadius(player?.radius || PLAYER.speedRefRadius) * mul;
 }
 
 function steerCreature(creature, tx, ty, dt, speedMul = 1, player = null, opts = {}) {

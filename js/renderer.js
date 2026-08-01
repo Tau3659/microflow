@@ -274,67 +274,74 @@ export class Renderer {
     }
 
     if (morph === MORPH.BACILLUS) {
-      const w = r * 2.25;
-      const h = r * 1.08;
+      const aspect = creature.aspect || 2.25;
+      const curve = creature.curve || 0;
+      const w = r * aspect;
+      const h = r * (creature.thin ? 0.72 : 1.08);
       ctx.beginPath();
       ctx.fillStyle = bodyGrad(0, 0, r * 1.2);
       ctx.strokeStyle = membrane;
       ctx.lineWidth = ghost ? 1 : 2;
-      if (typeof ctx.roundRect === "function") {
+      if (curve > 0.1) {
+        // 弧菌样弯曲杆菌
+        ctx.moveTo(-w / 2, 0);
+        ctx.quadraticCurveTo(0, -h * (0.9 + curve), w / 2, 0);
+        ctx.quadraticCurveTo(0, h * (0.9 + curve * 0.6), -w / 2, 0);
+        ctx.closePath();
+      } else if (typeof ctx.roundRect === "function") {
         ctx.roundRect(-w / 2, -h / 2, w, h, h / 2);
       } else {
         this._roundRect(ctx, -w / 2, -h / 2, w, h, h / 2);
       }
       ctx.fill();
       ctx.stroke();
+      if (creature.chain && !ghost) {
+        ctx.shadowBlur = 0;
+        for (let k = -1; k <= 1; k += 1) {
+          if (k === 0) continue;
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba(creature.membrane || creature.color, alpha * 0.35);
+          ctx.ellipse(k * w * 0.28, 0, w * 0.16, h * 0.35, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
       if (!ghost) {
         ctx.shadowBlur = 0;
         ctx.fillStyle = hexToRgba(creature.coreColor, 0.22);
         ctx.beginPath();
         ctx.ellipse(-r * 0.2, -r * 0.08, r * 0.4, r * 0.2, -0.2, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = hexToRgba("#e8f4f2", 0.12);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, w * 0.42, h * 0.28, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        if (complexity >= 2) {
-          ctx.strokeStyle = hexToRgba(creature.membrane || creature.color, 0.25);
-          ctx.beginPath();
-          ctx.ellipse(0, 0, w * 0.34, h * 0.2, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        }
       }
       this.drawComplexityDetails(ctx, creature, r, alpha, ghost);
-      this.drawFlagella(ctx, r, creature.flagella || 1, 1, alpha);
+      this.drawFlagella(ctx, r, creature.flagella || 0, 1, alpha);
     } else if (morph === MORPH.SPIRILLUM) {
       ctx.shadowBlur = 0;
       ctx.lineCap = "round";
+      const len = r * (creature.aspect || 2.7);
+      const amp = r * (creature.thin ? 0.32 : 0.58);
+      const thick = r * (creature.thin ? 0.28 : 0.62);
       ctx.strokeStyle = membrane;
-      ctx.lineWidth = r * 0.62;
+      ctx.lineWidth = thick;
       ctx.beginPath();
       for (let i = 0; i <= 28; i += 1) {
         const t = i / 28;
-        const x = (t - 0.5) * r * 2.7;
-        const y = Math.sin(t * Math.PI * 3.2 + creature.pulse) * r * 0.58;
+        const x = (t - 0.5) * len;
+        const y = Math.sin(t * Math.PI * 3.2 + creature.pulse) * amp;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
       ctx.strokeStyle = hexToRgba(creature.color, alpha * 0.9);
-      ctx.lineWidth = r * 0.42;
+      ctx.lineWidth = thick * 0.68;
       ctx.stroke();
-      if (complexity >= 3) {
-        ctx.strokeStyle = hexToRgba(creature.coreColor, alpha * 0.35);
-        ctx.lineWidth = r * 0.18;
-        ctx.stroke();
-      }
-      this.drawFlagella(ctx, r * 0.8, creature.flagella || 1, 1, alpha);
+      this.drawFlagella(ctx, r * 0.8, creature.flagella || 0, 1, alpha);
     } else if (morph === MORPH.COLONY) {
       const cells = creature.colonyCells || 5;
       const pts = [];
       for (let i = 0; i < cells; i += 1) {
         const a = (Math.PI * 2 * i) / cells + creature.pulse * 0.05;
-        const dist = i === 0 ? 0 : r * (0.48 + (i % 3) * 0.08);
+        const dist =
+          creature.hollow && i === 0 ? 0 : i === 0 ? 0 : r * (0.48 + (i % 3) * 0.08);
         const cx = Math.cos(a) * dist;
         const cy = Math.sin(a) * dist;
         const cr = r * (i === 0 ? 0.5 : 0.36);
@@ -505,30 +512,56 @@ export class Renderer {
         ctx.stroke();
       }
     } else {
+      // 球菌 / 变形虫 / 草履虫 / 硅藻 等
+      const rx = r * (creature.elongate ? creature.aspect || 1.45 : creature.lobed ? 1.08 : 1);
+      const ry = r * (creature.elongate ? 0.72 : creature.lobed ? 0.92 : 1);
       ctx.beginPath();
       ctx.fillStyle = bodyGrad(0, 0, r);
       ctx.strokeStyle = membrane;
       ctx.lineWidth = ghost ? 1 : 2.3;
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      if (creature.lobed) {
+        for (let i = 0; i < 8; i += 1) {
+          const a = (Math.PI * 2 * i) / 8;
+          const bump = 1 + Math.sin(creature.pulse * 2 + i) * 0.08;
+          const x = Math.cos(a) * rx * bump;
+          const y = Math.sin(a) * ry * bump;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+      } else if (creature.facets) {
+        const n = creature.facets;
+        for (let i = 0; i < n; i += 1) {
+          const a = (Math.PI * 2 * i) / n - Math.PI / 2;
+          const x = Math.cos(a) * rx;
+          const y = Math.sin(a) * ry;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+      } else {
+        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      }
       ctx.fill();
       ctx.stroke();
       if (!ghost) {
         ctx.shadowBlur = 0;
         ctx.beginPath();
         ctx.strokeStyle = hexToRgba(creature.coreColor, 0.28);
-        ctx.arc(0, 0, r * 0.86, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, rx * 0.86, ry * 0.86, 0, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.beginPath();
-        ctx.fillStyle = hexToRgba(creature.coreColor, 0.32);
-        ctx.ellipse(r * 0.22, -r * 0.18, r * 0.24, r * 0.15, 0.45, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.fillStyle = hexToRgba("#ffffff", 0.18);
-        ctx.ellipse(-r * 0.25, -r * 0.3, r * 0.18, r * 0.1, -0.5, 0, Math.PI * 2);
-        ctx.fill();
       }
       this.drawComplexityDetails(ctx, creature, r, alpha, ghost);
-      if (creature.cilia) this.drawCilia(ctx, r, alpha, 14 + complexity * 4);
+      if (creature.cilia) this.drawCilia(ctx, Math.max(rx, ry), alpha, 14 + complexity * 4);
+    }
+
+    // 荚膜外晕（玩家获得荚膜能力时）
+    if (!ghost && creature.capsule > 0) {
+      ctx.beginPath();
+      ctx.strokeStyle = hexToRgba(creature.coreColor || "#e8f4f2", alpha * 0.18);
+      ctx.lineWidth = 1.2 + creature.capsule * 0.4;
+      ctx.arc(0, 0, r * (1.12 + creature.capsule * 0.04), 0, Math.PI * 2);
+      ctx.stroke();
     }
 
     ctx.shadowBlur = 0;
@@ -598,6 +631,40 @@ export class Renderer {
     ctx.shadowBlur = 0;
   }
 
+  /** 稀有能力掉落：菱形微光，区别于普通蛋白 */
+  drawAbilities(abilities, camera, world) {
+    if (!abilities?.length) return;
+    const ctx = this.ctx;
+    for (const a of abilities) {
+      forEachWrapDraw(a.x, a.y, camera, world, this.w, this.h, 28, (x, y) => {
+        const pulse = 0.9 + Math.sin(this.time * 5 + a.phase) * 0.12;
+        const fade = Math.min(1, (a.life || 8) / 4);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(this.time * 1.6 + a.phase);
+        ctx.scale(pulse, pulse);
+        ctx.globalAlpha = 0.55 + fade * 0.4;
+        const g = ctx.createRadialGradient(0, 0, 1, 0, 0, a.r * 1.8);
+        g.addColorStop(0, hexToRgba("#ffffff", 0.75));
+        g.addColorStop(0.45, hexToRgba(a.color, 0.85));
+        g.addColorStop(1, hexToRgba(a.color, 0));
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(0, -a.r);
+        ctx.lineTo(a.r * 0.75, 0);
+        ctx.lineTo(0, a.r);
+        ctx.lineTo(-a.r * 0.75, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = hexToRgba("#ffffff", 0.45);
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+    ctx.globalAlpha = 1;
+  }
+
   drawDnas(dnas, camera, canEvolve, world) {
     const ctx = this.ctx;
     for (const d of dnas) {
@@ -662,7 +729,7 @@ export class Renderer {
           Math.sin(this.time * 2.2 + (creature.id || 0) * 0.7) * 0.1;
         const bodyAlpha = (creature.kind === "player" ? 0.78 : 0.64) * shimmer;
 
-        if (creature.kind === "player" && creature.boostTimer > 0) {
+        if (creature.kind === "player" && creature.boosting) {
           ctx.beginPath();
           ctx.strokeStyle = hexToRgba("#e8c27a", 0.28 * shimmer);
           ctx.lineWidth = 1.6;
@@ -833,6 +900,7 @@ export class Renderer {
     this.drawGhosts(level.ghosts, camera, world, flow);
     this.drawPortal(level.portal, camera, portalOpen, world);
     this.drawProteins(level.proteins, camera, world);
+    this.drawAbilities(level.abilities, camera, world);
     this.drawDnas(level.dnas, camera, canEvolve, world);
     for (const c of level.creatures) this.drawCreature(c, camera, world);
     this.drawCreature(level.player, camera, world);

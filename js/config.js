@@ -61,7 +61,7 @@ export const EVOLUTIONS = [
     membrane: "#8a6a3a",
     pointsToEvolve: 48,
     complexity: 3,
-    mouths: 2,
+    mouths: 1,
     flagella: 0,
     colonyCells: 6,
     organelles: 3,
@@ -81,7 +81,7 @@ export const EVOLUTIONS = [
     membrane: "#3a5a8a",
     pointsToEvolve: 72,
     complexity: 4,
-    mouths: 2,
+    mouths: 1,
     flagella: 0,
     colonyCells: 10,
     organelles: 5,
@@ -102,7 +102,7 @@ export const EVOLUTIONS = [
     membrane: "#8a3a3a",
     pointsToEvolve: Infinity,
     complexity: 5,
-    mouths: 3,
+    mouths: 1,
     spikes: 14,
     organelles: 6,
     membraneLayers: 3,
@@ -110,6 +110,200 @@ export const EVOLUTIONS = [
     capsidFacets: 8,
   },
 ];
+
+/**
+ * 稀有生物能力（参照真实微生物结构/功能）
+ * dropRate 为单次击杀掉落基础概率，达 maxStacks 后不再掉落
+ */
+export const ABILITIES = {
+  flagella: {
+    id: "flagella",
+    name: "鞭毛",
+    maxStacks: 5,
+    dropRate: 0.045,
+    color: "#7dffd0",
+    layers: [0, 1],
+    /** 每层：移动速度 +6% */
+  },
+  cilia: {
+    id: "cilia",
+    name: "纤毛",
+    maxStacks: 4,
+    dropRate: 0.04,
+    color: "#b8f0ef",
+    layers: [1, 2],
+  },
+  cellWall: {
+    id: "cellWall",
+    name: "细胞壁",
+    maxStacks: 3,
+    dropRate: 0.035,
+    color: "#c9e8a0",
+    layers: [0, 1, 2],
+  },
+  buccal: {
+    id: "buccal",
+    name: "胞口",
+    maxStacks: 4,
+    dropRate: 0.035,
+    color: "#e8c27a",
+    layers: [1, 2, 3],
+  },
+  capsule: {
+    id: "capsule",
+    name: "荚膜",
+    maxStacks: 3,
+    dropRate: 0.03,
+    color: "#a8d4ff",
+    layers: [0, 1, 2],
+  },
+  gasVacuole: {
+    id: "gasVacuole",
+    name: "气泡",
+    maxStacks: 3,
+    dropRate: 0.028,
+    color: "#d4f0ff",
+    layers: [0, 1],
+  },
+  chromatophore: {
+    id: "chromatophore",
+    name: "载色体",
+    maxStacks: 2,
+    dropRate: 0.022,
+    color: "#9be87a",
+    layers: [1, 2],
+  },
+  spikeProtein: {
+    id: "spikeProtein",
+    name: "刺突",
+    maxStacks: 3,
+    dropRate: 0.032,
+    color: "#e07a6a",
+    layers: [3],
+  },
+  plasmid: {
+    id: "plasmid",
+    name: "质粒",
+    maxStacks: 2,
+    dropRate: 0.018,
+    color: "#f0d7a0",
+    layers: [0, 1, 2, 3],
+  },
+  endospore: {
+    id: "endospore",
+    name: "芽孢",
+    maxStacks: 2,
+    dropRate: 0.015,
+    color: "#e8e0c8",
+    layers: [0, 1],
+  },
+};
+
+/** 真实微生物参考种：各层外观差异 */
+export const SPECIES = {
+  ecoli: {
+    id: "ecoli",
+    morph: MORPH.BACILLUS,
+    flagella: 2,
+    curve: 0,
+    aspect: 2.35,
+  },
+  vibrio: {
+    id: "vibrio",
+    morph: MORPH.BACILLUS,
+    flagella: 1,
+    curve: 0.55,
+    aspect: 2.1,
+  },
+  spirillum: {
+    id: "spirillum",
+    morph: MORPH.SPIRILLUM,
+    flagella: 2,
+    curve: 0,
+    aspect: 2.8,
+  },
+  cyanobacteria: {
+    id: "cyanobacteria",
+    morph: MORPH.BACILLUS,
+    flagella: 0,
+    curve: 0,
+    aspect: 2.6,
+    chain: true,
+    tint: "#4ecf9a",
+  },
+  amoeba: {
+    id: "amoeba",
+    morph: MORPH.COCCUS,
+    cilia: false,
+    lobed: true,
+    aspect: 1.15,
+  },
+  paramecium: {
+    id: "paramecium",
+    morph: MORPH.COCCUS,
+    cilia: true,
+    elongate: true,
+    aspect: 1.55,
+  },
+  euglena: {
+    id: "euglena",
+    morph: MORPH.SPIRILLUM,
+    flagella: 1,
+    chromatophore: true,
+    aspect: 2.2,
+  },
+  diatom: {
+    id: "diatom",
+    morph: MORPH.COCCUS,
+    facets: 6,
+    aspect: 1.05,
+    tint: "#8fd0c8",
+  },
+  volvox: {
+    id: "volvox",
+    morph: MORPH.COLONY,
+    colonyCells: 9,
+    cellBridges: true,
+    hollow: true,
+  },
+  choano: {
+    id: "choano",
+    morph: MORPH.COLONY,
+    colonyCells: 5,
+    collar: true,
+  },
+  budding: {
+    id: "budding",
+    morph: MORPH.COLONY,
+    colonyCells: 7,
+    budding: true,
+  },
+  adenovirus: {
+    id: "adenovirus",
+    morph: MORPH.VIRUS,
+    spikes: 12,
+    capsidFacets: 8,
+  },
+  influenza: {
+    id: "influenza",
+    morph: MORPH.VIRUS,
+    spikes: 16,
+    envelope: true,
+  },
+  t4phage: {
+    id: "t4phage",
+    morph: MORPH.PHAGE,
+    legs: 3,
+  },
+  filamentPhage: {
+    id: "filamentPhage",
+    morph: MORPH.SPIRILLUM,
+    flagella: 0,
+    thin: true,
+    aspect: 3.2,
+    tint: "#c4a0ff",
+  },
+};
 
 /** 生物圈层级 */
 export const LAYERS = [
@@ -130,9 +324,11 @@ export const LAYERS = [
     maxHostileNormals: 0,
     requiredEvolution: 0,
     morphPool: [MORPH.BACILLUS, MORPH.BACILLUS, MORPH.SPIRILLUM],
+    speciesPool: ["ecoli", "vibrio", "spirillum", "cyanobacteria", "ecoli"],
     boss: {
       name: "裂殖霸主",
       morph: MORPH.BACILLUS,
+      species: "ecoli",
       radius: 56,
       nuclei: 3,
       color: "#c45c5c",
@@ -155,9 +351,11 @@ export const LAYERS = [
     maxHostileNormals: 1,
     requiredEvolution: 1,
     morphPool: [MORPH.COCCUS, MORPH.SPIRILLUM, MORPH.COCCUS],
+    speciesPool: ["amoeba", "paramecium", "euglena", "diatom", "paramecium"],
     boss: {
       name: "纤毛暴君",
       morph: MORPH.COCCUS,
+      species: "paramecium",
       radius: 72,
       nuclei: 4,
       color: "#b85c7a",
@@ -180,9 +378,11 @@ export const LAYERS = [
     maxHostileNormals: 2,
     requiredEvolution: 2,
     morphPool: [MORPH.COLONY, MORPH.COCCUS, MORPH.COLONY],
+    speciesPool: ["volvox", "choano", "budding", "volvox", "amoeba"],
     boss: {
       name: "群核巨兽",
       morph: MORPH.COLONY,
+      species: "volvox",
       radius: 90,
       nuclei: 5,
       color: "#8a6ad1",
@@ -205,9 +405,11 @@ export const LAYERS = [
     maxHostileNormals: 3,
     requiredEvolution: 3,
     morphPool: [MORPH.VIRUS, MORPH.PHAGE, MORPH.VIRUS],
+    speciesPool: ["adenovirus", "influenza", "t4phage", "filamentPhage", "adenovirus"],
     boss: {
       name: "噬界母体",
       morph: MORPH.PHAGE,
+      species: "t4phage",
       radius: 108,
       nuclei: 6,
       color: "#e07a6a",
@@ -260,11 +462,11 @@ export const PLAYER = {
   /** 相对玩家常速，其他生物速度上限（略慢以便追逐/逃脱） */
   npcSpeedFactor: 0.86,
   bossSpeedFactor: 0.9,
-  /** 基础加速时长；实际时长随进化等级提升 */
-  boostDuration: 0.55,
-  boostDurationPerEvo: 0.24,
-  /** 加速能量回复满所需秒数（圆环自动回满） */
-  boostRegenTime: 1.6,
+  /** 满能量可按住加速的时长；随进化提升 */
+  boostDuration: 0.85,
+  boostDurationPerEvo: 0.28,
+  /** 加速能量从空回复满所需秒数 */
+  boostRegenTime: 1.85,
   turnRate: 9,
   segmentSpacing: 11,
   /** 体型越大移动越慢：相对此参考半径缩放速度 */

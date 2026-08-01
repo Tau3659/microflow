@@ -1,5 +1,6 @@
 import { LAYERS, TEMPER, WORLD } from "./config.js";
 import { createPlayer, createNormal, createBoss, createGhost } from "./creature.js";
+import { createAbilityPickup, rollAbilityDrop } from "./abilities.js";
 
 /** 将超额的固有攻击普通怪降为被动/警惕，保证 Boss 才是主要威胁 */
 function enforceHostileCap(creatures, layer) {
@@ -124,7 +125,12 @@ function createGhostLayer(layerIndex) {
 export function createLevel(layerIndex, playerState) {
   const layer = LAYERS[layerIndex];
   const spawn = { x: WORLD.width * 0.5, y: WORLD.height * 0.55 };
-  const player = createPlayer(spawn.x, spawn.y, playerState.evolutionId);
+  const player = createPlayer(
+    spawn.x,
+    spawn.y,
+    playerState.evolutionId,
+    playerState.abilities || null
+  );
   player.x = spawn.x;
   player.y = spawn.y;
 
@@ -159,6 +165,7 @@ export function createLevel(layerIndex, playerState) {
     ghosts,
     deepField,
     particles: [],
+    abilities: [],
     portal: createPortal(),
     world: { ...WORLD },
     points: playerState.points,
@@ -187,7 +194,7 @@ export function spawnBurst(level, x, y, color, count = 10) {
   }
 }
 
-/** 被吃掉时分解：体型越大释放蛋白质越多（体质量 + 体内储存）+ 少量 DNA */
+/** 被吃掉时分解：体型越大释放蛋白质越多（体质量 + 体内储存）+ 少量 DNA；极低概率掉落能力 */
 export function decomposeCreature(level, creature) {
   const layer = level.layer;
   const body = Math.max(0, creature.bodyProtein || Math.round((creature.radius || 16) / 13));
@@ -211,6 +218,24 @@ export function decomposeCreature(level, creature) {
       createDna(layer, creature.x + rand(-30, 30), creature.y + rand(-30, 30))
     );
   }
+
+  const abilityDef = rollAbilityDrop(
+    level.layerIndex,
+    level.player,
+    creature.kind === "boss"
+  );
+  if (abilityDef) {
+    if (!level.abilities) level.abilities = [];
+    level.abilities.push(
+      createAbilityPickup(
+        abilityDef,
+        creature.x + rand(-20, 20),
+        creature.y + rand(-20, 20)
+      )
+    );
+    spawnBurst(level, creature.x, creature.y, abilityDef.color, 10);
+  }
+
   spawnBurst(level, creature.x, creature.y, creature.color, 14 + Math.min(20, body));
   if (release > 0) {
     spawnBurst(level, creature.x, creature.y, layer.protein, 8 + Math.min(16, release));
