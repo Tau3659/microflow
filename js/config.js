@@ -222,7 +222,7 @@ export const PLAYER = {
   boostCooldown: 1.35,
   turnRate: 9,
   segmentSpacing: 11,
-  nucleusRadiusFactor: 0.28,
+  nucleusRadiusFactor: 0.22,
   mouthDistFactor: 0.95,
   mouthRadiusFactor: 0.32,
   eatRangeBonus: 2,

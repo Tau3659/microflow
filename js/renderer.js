@@ -43,8 +43,8 @@ export class Renderer {
     this.w = 0;
     this.h = 0;
     this.time = 0;
-    /** 由速度累积的额外视差偏移，强化两层相对位移 */
-    this.motion = { x: 0, y: 0 };
+    /** 与玩家前进相反的背景飘移，强化速度感 */
+    this.counterFlow = { x: 0, y: 0 };
   }
 
   resize() {
@@ -58,11 +58,13 @@ export class Renderer {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
-  /** 双层背景：远处下一层 + 近处当前层 */
-  drawLayeredBackground(level, camera) {
+  /** 双层背景：远处下一层 + 近处当前层；内容逆玩家方向飘动 */
+  drawLayeredBackground(level, camera, flow) {
     const ctx = this.ctx;
     const layer = level.layer;
     const next = level.nextLayer;
+    const fx = flow?.x || 0;
+    const fy = flow?.y || 0;
 
     // 底层：下一层色调（更深）
     const deep = ctx.createLinearGradient(0, 0, 0, this.h);
@@ -77,14 +79,14 @@ export class Renderer {
     ctx.fillStyle = deep;
     ctx.fillRect(0, 0, this.w, this.h);
 
-    // 下一层雾团（慢视差）
+    // 下一层雾团（慢视差 + 逆向飘动）
     if (level.deepField && next) {
       const deepCam = camOf(camera, PARALLAX.deep);
       ctx.save();
       ctx.globalAlpha = 0.22;
       for (const b of level.deepField.blobs) {
-        const x = b.x - deepCam.x;
-        const y = b.y - deepCam.y;
+        const x = b.x - deepCam.x + fx * 0.75;
+        const y = b.y - deepCam.y + fy * 0.75;
         if (x < -150 || y < -150 || x > this.w + 150 || y > this.h + 150) continue;
         const pulse = 1 + Math.sin(this.time * 0.7 + b.phase) * 0.08;
         const g = ctx.createRadialGradient(x, y, 2, x, y, b.r * pulse);
@@ -99,8 +101,8 @@ export class Renderer {
 
       const moteCam = camOf(camera, PARALLAX.deep * 1.15);
       for (const m of level.deepField.motes) {
-        const x = m.x - moteCam.x;
-        const y = m.y - moteCam.y;
+        const x = m.x - moteCam.x + fx * 1.15;
+        const y = m.y - moteCam.y + fy * 1.15;
         if (x < -10 || y < -10 || x > this.w + 10 || y > this.h + 10) continue;
         ctx.fillStyle = hexToRgba(m.color, 0.18 + Math.sin(this.time + m.phase) * 0.06);
         ctx.beginPath();
@@ -117,14 +119,17 @@ export class Renderer {
     ctx.fillStyle = near;
     ctx.fillRect(0, 0, this.w, this.h);
 
-    // 当前层微粒（中速视差）
+    // 当前层微粒：更快逆向飘动，突出前进速度
     const midCam = camOf(camera, PARALLAX.mid);
-    for (let i = 0; i < 36; i += 1) {
-      const px = ((i * 211 + midCam.x * 0.35) % (this.w + 50)) - 25;
-      const py = ((i * 127 + midCam.y * 0.35 + Math.sin(this.time * 0.4 + i) * 10) % (this.h + 50)) - 25;
-      ctx.fillStyle = hexToRgba(layer.protein, 0.1 + (i % 4) * 0.02);
+    for (let i = 0; i < 48; i += 1) {
+      const speed = 1.15 + (i % 5) * 0.45;
+      let px = i * 211 + midCam.x * 0.35 + fx * speed;
+      let py = i * 127 + midCam.y * 0.35 + fy * speed + Math.sin(this.time * 0.4 + i) * 10;
+      px = ((px % (this.w + 50)) + (this.w + 50)) % (this.w + 50) - 25;
+      py = ((py % (this.h + 50)) + (this.h + 50)) % (this.h + 50) - 25;
+      ctx.fillStyle = hexToRgba(layer.protein, 0.1 + (i % 4) * 0.025);
       ctx.beginPath();
-      ctx.arc(px, py, 1 + (i % 3) * 0.45, 0, Math.PI * 2);
+      ctx.arc(px, py, 1 + (i % 3) * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -384,12 +389,14 @@ export class Renderer {
     ctx.closePath();
   }
 
-  drawGhosts(ghosts, camera, world) {
+  drawGhosts(ghosts, camera, world, flow) {
     if (!ghosts?.length) return;
     const ghostCam = camOf(camera, PARALLAX.ghost);
+    const fx = (flow?.x || 0) * 0.9;
+    const fy = (flow?.y || 0) * 0.9;
     const ctx = this.ctx;
     for (const g of ghosts) {
-      forEachWrapDraw(g.x, g.y, ghostCam, world, this.w, this.h, 140, (x, y) => {
+      forEachWrapDraw(g.x + fx, g.y + fy, ghostCam, world, this.w, this.h, 140, (x, y) => {
         const alpha = g.isBossSilhouette ? 0.16 : 0.12;
         ctx.save();
         ctx.translate(x, y);
@@ -677,22 +684,23 @@ export class Renderer {
     this.time += 0.016;
     const p = level.player;
     const world = level.world;
-    this.motion.x += p.vx * 0.012;
-    this.motion.y += p.vy * 0.012;
-    this.motion.x *= 0.985;
-    this.motion.y *= 0.985;
 
-    const deepShift = {
-      x: camera.x + this.motion.x * 1.8,
-      y: camera.y + this.motion.y * 1.8,
-    };
-    const ghostShift = {
-      x: camera.x + this.motion.x * 1.15,
-      y: camera.y + this.motion.y * 1.15,
+    // 背景飘动方向与玩家前进相反；加速时更明显
+    const spd = Math.hypot(p.vx, p.vy);
+    const flowGain = 0.08 + Math.min(0.12, spd * 0.0025);
+    this.counterFlow.x -= p.vx * flowGain;
+    this.counterFlow.y -= p.vy * flowGain;
+    this.counterFlow.x *= 0.965;
+    this.counterFlow.y *= 0.965;
+
+    const flow = this.counterFlow;
+    const deepCam = {
+      x: camera.x * PARALLAX.deep,
+      y: camera.y * PARALLAX.deep,
     };
 
-    this.drawLayeredBackground(level, deepShift);
-    this.drawGhosts(level.ghosts, ghostShift, world);
+    this.drawLayeredBackground(level, deepCam, flow);
+    this.drawGhosts(level.ghosts, camera, world, flow);
     this.drawPortal(level.portal, camera, portalOpen, world);
     this.drawProteins(level.proteins, camera, world);
     this.drawDnas(level.dnas, camera, canEvolve, world);

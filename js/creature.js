@@ -52,76 +52,110 @@ export function wrappedOffset(fromX, fromY, toX, toY, world) {
   return { dx, dy, dist: Math.hypot(dx, dy) };
 }
 
+function pushApart(points, minDist, iterations = 8) {
+  for (let n = 0; n < iterations; n += 1) {
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        const dx = points[j].ox - points[i].ox;
+        const dy = points[j].oy - points[i].oy;
+        const d = Math.hypot(dx, dy) || 0.0001;
+        if (d >= minDist) continue;
+        const push = ((minDist - d) / d) * 0.55;
+        const px = dx * push * 0.5;
+        const py = dy * push * 0.5;
+        points[i].ox -= px;
+        points[i].oy -= py;
+        points[j].ox += px;
+        points[j].oy += py;
+      }
+    }
+  }
+  return points;
+}
+
+function clampInBody(ox, oy, maxR) {
+  const d = Math.hypot(ox, oy);
+  if (d <= maxR || d < 0.0001) return { ox, oy };
+  const s = maxR / d;
+  return { ox: ox * s, oy: oy * s };
+}
+
+/** 细胞核分散在体内不同位置，避免挤在一起被一次吞光 */
 function makeNuclei(count, radius, morph = MORPH.COCCUS) {
-  const baseR = radius * PLAYER.nucleusRadiusFactor * (count > 2 ? 0.78 : 0.9);
-  const nuclei = [];
+  const baseR = radius * PLAYER.nucleusRadiusFactor * (count > 2 ? 0.58 : 0.68);
+  // 核间距尽量大，避免一张嘴扫到多个
+  const minSep = radius * (count <= 2 ? 0.78 : count <= 3 ? 0.64 : count <= 4 ? 0.52 : 0.46);
+  const maxR = radius * 0.9;
+  const points = [];
 
   if (count <= 1) {
-    // 单核也不贴中心，略偏置
     const a = Math.random() * Math.PI * 2;
-    const dist = radius * (0.22 + Math.random() * 0.28);
-    nuclei.push({
-      ox: Math.cos(a) * dist,
-      oy: Math.sin(a) * dist,
-      alive: true,
-      r: baseR,
-    });
-    return nuclei;
-  }
-
-  if (morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM) {
-    for (let i = 0; i < count; i += 1) {
-      const t = count === 1 ? 0.5 : i / (count - 1);
-      nuclei.push({
-        ox: (t - 0.5) * radius * 1.7,
-        oy: (Math.random() - 0.5) * radius * 0.45,
-        alive: true,
-        r: baseR,
-      });
-    }
-    return nuclei;
-  }
-
-  if (morph === MORPH.COLONY) {
-    for (let i = 0; i < count; i += 1) {
-      const a = (Math.PI * 2 * i) / count + 0.4;
-      const dist = radius * (0.42 + (i % 2) * 0.18);
-      nuclei.push({
+    const dist = radius * (0.48 + Math.random() * 0.32);
+    return [
+      {
         ox: Math.cos(a) * dist,
         oy: Math.sin(a) * dist,
         alive: true,
         r: baseR,
-      });
-    }
-    return nuclei;
+      },
+    ];
   }
 
-  if (morph === MORPH.VIRUS || morph === MORPH.PHAGE) {
+  if (morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM) {
     for (let i = 0; i < count; i += 1) {
-      const a = (Math.PI * 2 * i) / count - Math.PI / 3;
-      const dist = radius * (0.5 + (i % 3) * 0.1);
-      nuclei.push({
-        ox: Math.cos(a) * dist,
-        oy: Math.sin(a) * dist * (morph === MORPH.PHAGE ? 0.75 : 1) - (morph === MORPH.PHAGE ? radius * 0.1 : 0),
-        alive: true,
-        r: baseR,
+      const t = i / (count - 1);
+      // 沿长轴两端拉开，并上下交错
+      points.push({
+        ox: (t - 0.5) * radius * 2.2,
+        oy: (i % 2 === 0 ? 1 : -1) * radius * (0.34 + (i % 3) * 0.1),
       });
     }
-    return nuclei;
+  } else if (morph === MORPH.COLONY) {
+    for (let i = 0; i < count; i += 1) {
+      const a = (Math.PI * 2 * i) / count + 0.2;
+      const dist = radius * (0.62 + (i % 2) * 0.2);
+      points.push({ ox: Math.cos(a) * dist, oy: Math.sin(a) * dist });
+    }
+  } else if (morph === MORPH.PHAGE) {
+    for (let i = 0; i < count; i += 1) {
+      const a = -Math.PI / 2 + ((i + 0.5) / count) * Math.PI * 1.7 - Math.PI * 0.85;
+      const dist = radius * (0.52 + (i % 2) * 0.24);
+      points.push({
+        ox: Math.cos(a) * dist,
+        oy: Math.sin(a) * dist * 0.85 - radius * 0.1,
+      });
+    }
+  } else {
+    // 球菌 / 病毒等：尽量贴外圈均匀分布
+    for (let i = 0; i < count; i += 1) {
+      const a = (Math.PI * 2 * i) / count + Math.PI / count;
+      const ring = count >= 4 ? (i % 2 === 0 ? 0.82 : 0.55) : 0.74;
+      const dist = radius * (ring + Math.random() * 0.06);
+      points.push({ ox: Math.cos(a) * dist, oy: Math.sin(a) * dist });
+    }
   }
 
-  // 球菌等：散布在外圈，带抖动
-  for (let i = 0; i < count; i += 1) {
-    const a = (Math.PI * 2 * i) / count + Math.random() * 0.35;
-    const dist = radius * (0.48 + Math.random() * 0.28);
-    nuclei.push({
-      ox: Math.cos(a) * dist,
-      oy: Math.sin(a) * dist,
-      alive: true,
-      r: baseR,
-    });
+  pushApart(points, minSep, 14);
+  for (const p of points) {
+    const c = clampInBody(p.ox, p.oy, maxR);
+    p.ox = c.ox;
+    p.oy = c.oy;
+    const d = Math.hypot(p.ox, p.oy);
+    if (d < radius * 0.36) {
+      const a = Math.atan2(p.oy, p.ox) || Math.random() * Math.PI * 2;
+      p.ox = Math.cos(a) * radius * 0.5;
+      p.oy = Math.sin(a) * radius * 0.5;
+    }
   }
-  return nuclei;
+  // 钳入体缘后再推一次，避免挤回一团
+  pushApart(points, minSep * 0.92, 8);
+  for (const p of points) {
+    const c = clampInBody(p.ox, p.oy, maxR);
+    p.ox = c.ox;
+    p.oy = c.oy;
+  }
+
+  return points.map((p) => ({ ox: p.ox, oy: p.oy, alive: true, r: baseR }));
 }
 
 /** 嘴可在侧面/斜前方，不一定正前方 */
