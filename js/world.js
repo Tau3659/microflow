@@ -1,5 +1,5 @@
 import { LAYERS, WORLD } from "./config.js";
-import { createPlayer, createNormal, createBoss } from "./creature.js";
+import { createPlayer, createNormal, createBoss, createGhost } from "./creature.js";
 
 function rand(min, max) {
   return min + Math.random() * (max - min);
@@ -47,11 +47,54 @@ export function createPortal() {
   };
 }
 
+function createDeepField(layer, nextLayer) {
+  const motes = [];
+  for (let i = 0; i < 70; i += 1) {
+    motes.push({
+      x: rand(0, WORLD.width),
+      y: rand(0, WORLD.height),
+      r: rand(1, 3.5),
+      phase: rand(0, Math.PI * 2),
+      color: nextLayer?.protein || layer.protein,
+    });
+  }
+  const blobs = [];
+  for (let i = 0; i < 18; i += 1) {
+    blobs.push({
+      x: rand(0, WORLD.width),
+      y: rand(0, WORLD.height),
+      r: rand(40, 120),
+      phase: rand(0, Math.PI * 2),
+      color: nextLayer?.bgTop || layer.bgTop,
+    });
+  }
+  return { motes, blobs };
+}
+
+function createGhostLayer(layerIndex) {
+  const next = LAYERS[layerIndex + 1];
+  if (!next) return { ghosts: [], nextLayer: null };
+  const ghosts = [];
+  for (let i = 0; i < 14; i += 1) {
+    ghosts.push(
+      createGhost(rand(80, WORLD.width - 80), rand(80, WORLD.height - 80), next)
+    );
+  }
+  // 隐约的下一层 Boss 剪影
+  ghosts.push({
+    ...createGhost(WORLD.width * 0.72, WORLD.height * 0.3, next),
+    radius: next.boss.radius * 0.85,
+    morph: next.boss.morph,
+    color: next.boss.color,
+    isBossSilhouette: true,
+  });
+  return { ghosts, nextLayer: next };
+}
+
 export function createLevel(layerIndex, playerState) {
   const layer = LAYERS[layerIndex];
   const spawn = { x: WORLD.width * 0.5, y: WORLD.height * 0.55 };
   const player = createPlayer(spawn.x, spawn.y, playerState.evolutionId);
-  // 保留进化体型，但重置位置相关
   player.x = spawn.x;
   player.y = spawn.y;
 
@@ -68,13 +111,19 @@ export function createLevel(layerIndex, playerState) {
   const boss = createBoss(bossPos.x, bossPos.y, layer);
   creatures.push(boss);
 
+  const { ghosts, nextLayer } = createGhostLayer(layerIndex);
+  const deepField = createDeepField(layer, nextLayer);
+
   return {
     layerIndex,
     layer,
+    nextLayer,
     player,
     proteins,
     dnas,
     creatures,
+    ghosts,
+    deepField,
     particles: [],
     floats: [],
     portal: createPortal(),

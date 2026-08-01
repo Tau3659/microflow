@@ -2,6 +2,7 @@ import { EVOLUTIONS, LAYERS, PLAYER, WORLD } from "./config.js";
 import {
   updatePlayer,
   updateEnemy,
+  updateGhost,
   applyEvolution,
   aliveNuclei,
   nucleusWorldPos,
@@ -135,6 +136,9 @@ export class Game {
 
     for (const c of level.creatures) {
       updateEnemy(c, player, dt, level.world);
+    }
+    for (const g of level.ghosts || []) {
+      updateGhost(g, dt, level.world);
     }
 
     this._collectPickups();

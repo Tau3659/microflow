@@ -1,63 +1,90 @@
+/** 外形：杆菌 / 球菌 / 螺旋菌 / 多细胞集群 / 囊膜病毒 / 噬菌体 */
+export const MORPH = {
+  BACILLUS: "bacillus",
+  COCCUS: "coccus",
+  SPIRILLUM: "spirillum",
+  COLONY: "colony",
+  VIRUS: "virus",
+  PHAGE: "phage",
+};
+
 /** 进化形态：原核 → 真核单细胞 → 多细胞 → 复杂多细胞 → 病毒聚合体 */
 export const EVOLUTIONS = [
   {
     id: 0,
     name: "原核细胞",
+    morph: MORPH.BACILLUS,
     radius: 16,
     segmentCount: 3,
     nuclei: 1,
     color: "#3ecfb0",
     coreColor: "#9be8d6",
+    membrane: "#1a6b62",
     pointsToEvolve: 12,
     complexity: 1,
+    flagella: 1,
   },
   {
     id: 1,
     name: "真核单细胞",
+    morph: MORPH.COCCUS,
     radius: 24,
     segmentCount: 5,
     nuclei: 1,
     color: "#5ec4c8",
     coreColor: "#b8f0ef",
+    membrane: "#2a6f78",
     pointsToEvolve: 28,
     complexity: 2,
+    flagella: 0,
   },
   {
     id: 2,
     name: "原始多细胞",
+    morph: MORPH.COLONY,
     radius: 34,
     segmentCount: 8,
     nuclei: 1,
     color: "#e8c27a",
     coreColor: "#ffe6a8",
+    membrane: "#8a6a3a",
     pointsToEvolve: 48,
     complexity: 3,
+    flagella: 0,
+    colonyCells: 5,
   },
   {
     id: 3,
     name: "复杂多细胞",
+    morph: MORPH.COLONY,
     radius: 46,
     segmentCount: 12,
     nuclei: 1,
     color: "#7eb6ff",
     coreColor: "#d4e7ff",
+    membrane: "#3a5a8a",
     pointsToEvolve: 72,
     complexity: 4,
+    flagella: 0,
+    colonyCells: 9,
   },
   {
     id: 4,
     name: "病毒聚合体",
+    morph: MORPH.VIRUS,
     radius: 58,
     segmentCount: 16,
     nuclei: 1,
     color: "#e07a6a",
     coreColor: "#ffc4bc",
+    membrane: "#8a3a3a",
     pointsToEvolve: Infinity,
     complexity: 5,
+    spikes: 12,
   },
 ];
 
-/** 生物圈层级：进化后可前往下一层 */
+/** 生物圈层级 */
 export const LAYERS = [
   {
     id: 0,
@@ -71,11 +98,15 @@ export const LAYERS = [
     dnaCount: 6,
     normalCount: 10,
     requiredEvolution: 0,
+    morphPool: [MORPH.BACILLUS, MORPH.BACILLUS, MORPH.SPIRILLUM],
     boss: {
       name: "裂殖霸主",
+      morph: MORPH.BACILLUS,
       radius: 52,
       nuclei: 3,
       color: "#c45c5c",
+      membrane: "#6a2a2a",
+      flagella: 4,
     },
   },
   {
@@ -90,11 +121,15 @@ export const LAYERS = [
     dnaCount: 7,
     normalCount: 12,
     requiredEvolution: 1,
+    morphPool: [MORPH.COCCUS, MORPH.SPIRILLUM, MORPH.COCCUS],
     boss: {
       name: "纤毛暴君",
+      morph: MORPH.COCCUS,
       radius: 64,
       nuclei: 4,
       color: "#b85c7a",
+      membrane: "#6a2a48",
+      cilia: true,
     },
   },
   {
@@ -109,11 +144,15 @@ export const LAYERS = [
     dnaCount: 8,
     normalCount: 14,
     requiredEvolution: 2,
+    morphPool: [MORPH.COLONY, MORPH.COCCUS, MORPH.COLONY],
     boss: {
       name: "群核巨兽",
+      morph: MORPH.COLONY,
       radius: 78,
       nuclei: 5,
       color: "#8a6ad1",
+      membrane: "#3a2a6a",
+      colonyCells: 11,
     },
   },
   {
@@ -128,11 +167,15 @@ export const LAYERS = [
     dnaCount: 8,
     normalCount: 16,
     requiredEvolution: 3,
+    morphPool: [MORPH.VIRUS, MORPH.PHAGE, MORPH.VIRUS],
     boss: {
       name: "噬界母体",
+      morph: MORPH.PHAGE,
       radius: 92,
       nuclei: 6,
       color: "#e07a6a",
+      membrane: "#6a2020",
+      spikes: 16,
     },
   },
 ];
@@ -140,6 +183,14 @@ export const LAYERS = [
 export const WORLD = {
   width: 2600,
   height: 2600,
+};
+
+/** 视差：下一层更慢，相对位移体现速度感 */
+export const PARALLAX = {
+  deep: 0.22,
+  ghost: 0.42,
+  mid: 0.68,
+  current: 1,
 };
 
 export const PLAYER = {

@@ -1,4 +1,4 @@
-import { EVOLUTIONS, PLAYER } from "./config.js";
+import { EVOLUTIONS, MORPH, PLAYER } from "./config.js";
 
 let nextId = 1;
 
@@ -33,6 +33,23 @@ function makeNuclei(count, radius) {
   return nuclei;
 }
 
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function visualFromEvo(evo) {
+  return {
+    morph: evo.morph,
+    color: evo.color,
+    coreColor: evo.coreColor,
+    membrane: evo.membrane,
+    flagella: evo.flagella || 0,
+    spikes: evo.spikes || 0,
+    colonyCells: evo.colonyCells || 0,
+    cilia: !!evo.cilia,
+  };
+}
+
 export function createPlayer(x, y, evolutionId = 0) {
   const evo = EVOLUTIONS[evolutionId];
   const segments = [];
@@ -49,8 +66,7 @@ export function createPlayer(x, y, evolutionId = 0) {
     angle: 0,
     evolutionId,
     radius: evo.radius,
-    color: evo.color,
-    coreColor: evo.coreColor,
+    ...visualFromEvo(evo),
     segments,
     nuclei: makeNuclei(evo.nuclei, evo.radius),
     pulse: 0,
@@ -65,8 +81,7 @@ export function applyEvolution(player, evolutionId) {
   const evo = EVOLUTIONS[evolutionId];
   player.evolutionId = evolutionId;
   player.radius = evo.radius;
-  player.color = evo.color;
-  player.coreColor = evo.coreColor;
+  Object.assign(player, visualFromEvo(evo));
   player.nuclei = makeNuclei(evo.nuclei, evo.radius);
   while (player.segments.length < evo.segmentCount) {
     const last = player.segments[player.segments.length - 1];
@@ -79,6 +94,7 @@ export function applyEvolution(player, evolutionId) {
 export function createNormal(x, y, layer, evolutionFloor = 0) {
   const tier = clamp(evolutionFloor + Math.floor(Math.random() * 2), 0, EVOLUTIONS.length - 1);
   const evo = EVOLUTIONS[tier];
+  const morph = pick(layer.morphPool || [evo.morph]);
   const radius = evo.radius * (0.75 + Math.random() * 0.45);
   const segments = [];
   const count = Math.max(3, evo.segmentCount - 1);
@@ -94,8 +110,14 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     vy: 0,
     angle: Math.random() * Math.PI * 2,
     radius,
+    morph,
     color: layer.accent,
     coreColor: "#e8f4f2",
+    membrane: layer.bgTop,
+    flagella: morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM ? 1 + Math.floor(Math.random() * 2) : 0,
+    spikes: morph === MORPH.VIRUS ? 8 + Math.floor(Math.random() * 4) : 0,
+    colonyCells: morph === MORPH.COLONY ? 4 + Math.floor(Math.random() * 4) : 0,
+    cilia: morph === MORPH.COCCUS && Math.random() < 0.35,
     segments,
     nuclei: makeNuclei(1, radius),
     pulse: Math.random() * 10,
@@ -124,8 +146,14 @@ export function createBoss(x, y, layer) {
     vy: 0,
     angle: 0,
     radius: b.radius,
+    morph: b.morph || MORPH.BACILLUS,
     color: b.color,
     coreColor: "#ffe0dc",
+    membrane: b.membrane || "#4a2020",
+    flagella: b.flagella || 0,
+    spikes: b.spikes || 0,
+    colonyCells: b.colonyCells || 0,
+    cilia: !!b.cilia,
     segments,
     nuclei: makeNuclei(b.nuclei, b.radius),
     pulse: 0,
@@ -138,9 +166,33 @@ export function createBoss(x, y, layer) {
   };
 }
 
+/** 下一层隐约可见的幽灵生物（不可交互） */
+export function createGhost(x, y, nextLayer) {
+  const morph = pick(nextLayer.morphPool || [MORPH.COCCUS]);
+  const radius = 18 + Math.random() * 36;
+  return {
+    kind: "ghost",
+    x,
+    y,
+    angle: Math.random() * Math.PI * 2,
+    radius,
+    morph,
+    color: nextLayer.accent,
+    membrane: nextLayer.bgTop,
+    coreColor: nextLayer.protein,
+    flagella: morph === MORPH.BACILLUS ? 2 : 0,
+    spikes: morph === MORPH.VIRUS || morph === MORPH.PHAGE ? 10 : 0,
+    colonyCells: morph === MORPH.COLONY ? 6 : 0,
+    cilia: morph === MORPH.COCCUS,
+    pulse: Math.random() * 10,
+    drift: 12 + Math.random() * 22,
+    driftAngle: Math.random() * Math.PI * 2,
+  };
+}
+
 export function syncSegments(creature) {
   const segs = creature.segments;
-  if (!segs.length) return;
+  if (!segs?.length) return;
   segs[0].x = creature.x;
   segs[0].y = creature.y;
   const spacing = PLAYER.segmentSpacing * (0.85 + creature.radius * 0.008);
@@ -221,7 +273,6 @@ export function updateEnemy(creature, player, dt, world) {
   if (dist < chaseRange) {
     const n = normalize(toPlayerX, toPlayerY);
     const weight = creature.kind === "boss" ? 1.8 : creature.aggro;
-    // 普通生物略躲避更强玩家；Boss 始终攻击
     if (creature.kind === "normal" && player.radius > creature.radius * 1.25) {
       tx = -n.x * 1.2 + tx * 0.3;
       ty = -n.y * 1.2 + ty * 0.3;
@@ -246,4 +297,18 @@ export function updateEnemy(creature, player, dt, world) {
   creature.y = clamp(creature.y + creature.vy * dt, 50, world.height - 50);
   creature.pulse += dt * 2;
   syncSegments(creature);
+}
+
+export function updateGhost(ghost, dt, world) {
+  ghost.driftAngle += dt * 0.35;
+  ghost.x += Math.cos(ghost.driftAngle) * ghost.drift * dt;
+  ghost.y += Math.sin(ghost.driftAngle * 0.8) * ghost.drift * 0.7 * dt;
+  if (world) {
+    if (ghost.x < -40) ghost.x = world.width + 40;
+    if (ghost.x > world.width + 40) ghost.x = -40;
+    if (ghost.y < -40) ghost.y = world.height + 40;
+    if (ghost.y > world.height + 40) ghost.y = -40;
+  }
+  ghost.angle += dt * 0.4;
+  ghost.pulse += dt * 1.4;
 }
