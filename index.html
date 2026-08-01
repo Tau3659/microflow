@@ -21,29 +21,40 @@
       <div class="title-content">
         <p class="brand">MICROFLOW</p>
         <h1 class="brand-cn">菌流</h1>
-        <p class="tagline">潜入微观之海，吞噬、生长、下潜</p>
-        <button id="btn-start" class="cta" type="button">开始漂流</button>
-        <p class="hint">触屏或鼠标引导方向 · 吞下更小的生命</p>
+        <p class="tagline">从原核细胞启程，吞噬细胞核，进化上行</p>
+        <button id="btn-start" class="cta" type="button">开始演化</button>
+        <p class="hint">左摇杆移动 · 右键加速 · 吃蛋白质攒点 · DNA 进化</p>
       </div>
     </section>
 
     <section id="hud" class="hud hidden" aria-live="polite">
       <div class="hud-left">
         <span class="hud-brand">菌流</span>
-        <span id="hud-depth">表层</span>
+        <span id="hud-layer">原核海域</span>
+        <span id="hud-form">原核细胞</span>
       </div>
       <div class="hud-right">
-        <span id="hud-mass">质量 1</span>
+        <span id="hud-points">蛋白质 0 / 12</span>
+        <span id="hud-evolve" class="hud-evolve">收集蛋白质</span>
       </div>
     </section>
 
-    <section id="pause-hint" class="pause-hint hidden">松手暂停 · 按住游动</section>
+    <div id="controls" class="controls hidden">
+      <div id="virtual-pad" class="virtual-pad" aria-label="方向键">
+        <div class="pad-cross" aria-hidden="true"></div>
+        <div id="virtual-knob" class="virtual-knob"></div>
+        <span class="control-label">方向</span>
+      </div>
+      <button id="btn-boost" class="boost-btn" type="button" aria-label="加速">
+        <span class="boost-icon">加速</span>
+      </button>
+    </div>
 
     <section id="overlay" class="screen overlay hidden">
       <div class="overlay-card">
         <p class="overlay-brand">菌流</p>
-        <h2 id="overlay-title">被吞噬了</h2>
-        <p id="overlay-text">更大的生命吞没了你。再试一次？</p>
+        <h2 id="overlay-title">细胞核被吞噬</h2>
+        <p id="overlay-text">你的细胞核被吞食，生命终止。</p>
         <div class="overlay-actions">
           <button id="btn-retry" class="cta" type="button">重新开始</button>
           <button id="btn-home" class="cta ghost" type="button">返回标题</button>

@@ -1,3 +1,6 @@
+import { EVOLUTIONS } from "./config.js";
+import { aliveNuclei, nucleusWorldPos } from "./creature.js";
+
 function hexToRgba(hex, alpha) {
   const h = hex.replace("#", "");
   const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
@@ -29,56 +32,97 @@ export class Renderer {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
-  clear(depth) {
+  clear(layer) {
     const g = this.ctx.createLinearGradient(0, 0, 0, this.h);
-    g.addColorStop(0, depth.bgTop);
-    g.addColorStop(1, depth.bgBottom);
+    g.addColorStop(0, layer.bgTop);
+    g.addColorStop(1, layer.bgBottom);
     this.ctx.fillStyle = g;
     this.ctx.fillRect(0, 0, this.w, this.h);
   }
 
-  drawAmbient(camera, depth) {
+  drawAmbient(layer) {
     const ctx = this.ctx;
-    ctx.save();
-    for (let i = 0; i < 48; i += 1) {
-      const px = ((i * 173 + this.time * (8 + (i % 5))) % (this.w + 40)) - 20;
-      const py =
-        ((i * 97 + Math.sin(this.time * 0.4 + i) * 20) % (this.h + 40)) - 20;
-      const a = 0.08 + (i % 7) * 0.02;
-      ctx.fillStyle = hexToRgba(depth.particle, a);
+    for (let i = 0; i < 40; i += 1) {
+      const px = ((i * 173 + this.time * (6 + (i % 4))) % (this.w + 40)) - 20;
+      const py = ((i * 97 + Math.sin(this.time * 0.35 + i) * 16) % (this.h + 40)) - 20;
+      ctx.fillStyle = hexToRgba(layer.protein, 0.08 + (i % 5) * 0.02);
       ctx.beginPath();
-      ctx.arc(px, py, 1 + (i % 3) * 0.6, 0, Math.PI * 2);
+      ctx.arc(px, py, 1 + (i % 3) * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
-
     const vignette = ctx.createRadialGradient(
       this.w * 0.5,
       this.h * 0.45,
-      this.h * 0.15,
+      this.h * 0.12,
       this.w * 0.5,
       this.h * 0.5,
-      this.h * 0.85
+      this.h * 0.9
     );
     vignette.addColorStop(0, "rgba(0,0,0,0)");
-    vignette.addColorStop(1, "rgba(0,0,0,0.35)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.38)");
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, this.w, this.h);
-    ctx.restore();
   }
 
-  drawFood(foods, camera) {
+  drawProteins(proteins, camera) {
     const ctx = this.ctx;
-    for (const f of foods) {
-      const x = f.x - camera.x;
-      const y = f.y - camera.y;
+    for (const p of proteins) {
+      const x = p.x - camera.x;
+      const y = p.y - camera.y;
       if (x < -20 || y < -20 || x > this.w + 20 || y > this.h + 20) continue;
-      const pulse = 0.75 + Math.sin(this.time * 3 + f.phase) * 0.25;
+      const pulse = 0.85 + Math.sin(this.time * 3.2 + p.phase) * 0.15;
       ctx.beginPath();
-      ctx.fillStyle = hexToRgba(f.color, 0.85);
-      ctx.shadowColor = f.color;
-      ctx.shadowBlur = 8;
-      ctx.arc(x, y, f.r * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba(p.color, 0.9);
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 10;
+      // 蛋白质：圆润小团
+      ctx.arc(x, y, p.r * pulse, 0, Math.PI * 2);
       ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  drawDnas(dnas, camera, canEvolve) {
+    const ctx = this.ctx;
+    for (const d of dnas) {
+      const x = d.x - camera.x;
+      const y = d.y - camera.y;
+      if (x < -30 || y < -30 || x > this.w + 30 || y > this.h + 30) continue;
+      const pulse = 1 + Math.sin(this.time * 4 + d.phase) * 0.08;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(this.time * 1.2 + d.phase);
+      ctx.scale(pulse, pulse);
+      ctx.shadowColor = d.color;
+      ctx.shadowBlur = canEvolve ? 16 : 6;
+      ctx.strokeStyle = hexToRgba(d.color, canEvolve ? 0.95 : 0.4);
+      ctx.lineWidth = 2.2;
+      // DNA 双螺旋示意
+      ctx.beginPath();
+      for (let i = -8; i <= 8; i += 1) {
+        const t = i / 8;
+        const px = t * d.r;
+        const py = Math.sin(t * Math.PI * 2) * d.r * 0.45;
+        if (i === -8) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.beginPath();
+      for (let i = -8; i <= 8; i += 1) {
+        const t = i / 8;
+        const px = t * d.r;
+        const py = -Math.sin(t * Math.PI * 2) * d.r * 0.45;
+        if (i === -8) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      if (canEvolve) {
+        ctx.fillStyle = hexToRgba(d.color, 0.2);
+        ctx.beginPath();
+        ctx.arc(0, 0, d.r * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
     ctx.shadowBlur = 0;
   }
@@ -86,63 +130,97 @@ export class Renderer {
   drawCreature(creature, camera) {
     const ctx = this.ctx;
     const segs = creature.segments;
-    if (!segs.length) return;
-
     const headX = creature.x - camera.x;
     const headY = creature.y - camera.y;
-    if (
-      headX < -120 ||
-      headY < -120 ||
-      headX > this.w + 120 ||
-      headY > this.h + 120
-    ) {
+    if (headX < -160 || headY < -160 || headX > this.w + 160 || headY > this.h + 160) {
       return;
     }
 
-    const hurt = creature.hurtTimer > 0;
-    const base = hurt ? "#e07a6a" : creature.hue;
-    const pulse = 1 + Math.sin(creature.pulse) * 0.04;
+    const pulse = 1 + Math.sin(creature.pulse) * 0.045;
+    const evo = creature.kind === "player" ? EVOLUTIONS[creature.evolutionId] : null;
 
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
+    // 身体节
     for (let i = segs.length - 1; i >= 0; i -= 1) {
       const t = i / (segs.length - 1 || 1);
-      const r = creature.radius * (1 - t * 0.72) * pulse;
+      let r = creature.radius * (1 - t * 0.68) * pulse;
+      // 多细胞/病毒形态更“分节”
+      if (evo && evo.complexity >= 3) {
+        r *= 0.92 + Math.sin(creature.pulse + i) * 0.06;
+      }
       const x = segs[i].x - camera.x;
       const y = segs[i].y - camera.y;
-      const alpha = creature.isPlayer ? 0.9 - t * 0.35 : 0.75 - t * 0.3;
-
       ctx.beginPath();
-      ctx.fillStyle = hexToRgba(base, alpha);
-      ctx.shadowColor = hexToRgba(base, 0.45);
-      ctx.shadowBlur = creature.isPlayer ? 14 : 8;
-      ctx.arc(x, y, Math.max(2, r), 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba(creature.color, creature.kind === "player" ? 0.88 - t * 0.3 : 0.72 - t * 0.28);
+      ctx.shadowColor = hexToRgba(creature.color, 0.4);
+      ctx.shadowBlur = creature.kind === "boss" ? 18 : 10;
+      ctx.arc(x, y, Math.max(2.5, r), 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // head core
-    ctx.beginPath();
-    ctx.fillStyle = hexToRgba("#ffffff", creature.isPlayer ? 0.55 : 0.28);
-    ctx.shadowBlur = 0;
-    ctx.arc(headX, headY, Math.max(2, creature.radius * 0.28 * pulse), 0, Math.PI * 2);
-    ctx.fill();
+    // 病毒形态：外壳刺突
+    if (evo && evo.id === 4) {
+      ctx.save();
+      ctx.translate(headX, headY);
+      ctx.rotate(creature.angle);
+      ctx.strokeStyle = hexToRgba(creature.color, 0.75);
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 8; i += 1) {
+        const a = (Math.PI * 2 * i) / 8;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * creature.radius * 0.7, Math.sin(a) * creature.radius * 0.7);
+        ctx.lineTo(Math.cos(a) * creature.radius * 1.25, Math.sin(a) * creature.radius * 1.25);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba(creature.coreColor, 0.8);
+        ctx.arc(Math.cos(a) * creature.radius * 1.25, Math.sin(a) * creature.radius * 1.25, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
 
-    // eye-ish dots for personality
-    const ox = Math.cos(creature.angle) * creature.radius * 0.35;
-    const oy = Math.sin(creature.angle) * creature.radius * 0.35;
-    ctx.beginPath();
-    ctx.fillStyle = hexToRgba("#031016", 0.7);
-    ctx.arc(headX + ox, headY + oy, Math.max(1.2, creature.radius * 0.12), 0, Math.PI * 2);
-    ctx.fill();
-
-    if (creature.isPredator && !creature.isPlayer) {
+    // 细胞核（战斗核心）
+    for (const n of creature.nuclei) {
+      if (!n.alive) continue;
+      const wp = nucleusWorldPos(creature, n);
+      const nx = wp.x - camera.x;
+      const ny = wp.y - camera.y;
       ctx.beginPath();
-      ctx.strokeStyle = hexToRgba("#e07a6a", 0.45);
-      ctx.lineWidth = 1.5;
-      ctx.arc(headX, headY, creature.radius * 1.25 * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba(creature.coreColor, 0.95);
+      ctx.shadowColor = creature.coreColor;
+      ctx.shadowBlur = 12;
+      ctx.arc(nx, ny, wp.r * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba("#031016", 0.55);
+      ctx.shadowBlur = 0;
+      ctx.arc(nx, ny, wp.r * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (creature.kind === "boss") {
+      ctx.beginPath();
+      ctx.strokeStyle = hexToRgba(creature.color, 0.5);
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 0;
+      ctx.arc(headX, headY, creature.radius * 1.2 * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = hexToRgba("#e8f4f2", 0.7);
+      ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(creature.name, headX, headY - creature.radius - 14);
+      const left = aliveNuclei(creature).length;
+      ctx.fillText(`核 ${left}`, headX, headY - creature.radius - 1);
+    }
+
+    if (creature.kind === "player" && creature.boostTimer > 0) {
+      ctx.beginPath();
+      ctx.strokeStyle = hexToRgba("#e8c27a", 0.55);
+      ctx.lineWidth = 2;
+      ctx.arc(headX, headY, creature.radius * 1.35, 0, Math.PI * 2);
       ctx.stroke();
     }
+
+    ctx.shadowBlur = 0;
   }
 
   drawPortal(portal, camera, open) {
@@ -150,26 +228,22 @@ export class Renderer {
     const ctx = this.ctx;
     const x = portal.x - camera.x;
     const y = portal.y - camera.y;
-    if (x < -80 || y < -80 || x > this.w + 80 || y > this.h + 80) return;
+    if (x < -100 || y < -100 || x > this.w + 100 || y > this.h + 100) return;
 
-    const pulse = 1 + Math.sin(portal.pulse * 3) * 0.08;
+    const pulse = 1 + Math.sin(portal.pulse * 2.8) * 0.08;
     const r = portal.r * pulse;
-    const color = open ? "#3ecfb0" : "rgba(232,244,242,0.25)";
-
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(portal.pulse * 0.6);
-
+    ctx.rotate(portal.pulse * 0.5);
     for (let i = 0; i < 3; i += 1) {
       ctx.beginPath();
       ctx.strokeStyle = open
-        ? hexToRgba("#3ecfb0", 0.55 - i * 0.15)
-        : `rgba(232,244,242,${0.18 - i * 0.04})`;
+        ? hexToRgba("#3ecfb0", 0.6 - i * 0.15)
+        : "rgba(232,244,242,0.18)";
       ctx.lineWidth = 2;
-      ctx.ellipse(0, 0, r * (1 + i * 0.22), r * (0.55 + i * 0.1), 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, r * (1 + i * 0.2), r * (0.55 + i * 0.08), 0, 0, Math.PI * 2);
       ctx.stroke();
     }
-
     if (open) {
       const g = ctx.createRadialGradient(0, 0, 2, 0, 0, r);
       g.addColorStop(0, "rgba(62,207,176,0.35)");
@@ -179,54 +253,45 @@ export class Renderer {
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.fill();
     }
-
     ctx.restore();
-    ctx.fillStyle = open ? hexToRgba("#e8f4f2", 0.75) : "rgba(232,244,242,0.35)";
+    ctx.fillStyle = open ? "rgba(232,244,242,0.8)" : "rgba(232,244,242,0.35)";
     ctx.font = "12px -apple-system, BlinkMacSystemFont, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(open ? "下潜" : "成长后开启", x, y + r + 18);
+    ctx.fillText(open ? "进入上一层生物圈" : "进化后开启", x, y + r + 18);
   }
 
   drawParticles(particles, camera) {
     const ctx = this.ctx;
     for (const p of particles) {
-      const x = p.x - camera.x;
-      const y = p.y - camera.y;
       const a = Math.max(0, p.life / p.maxLife);
       ctx.beginPath();
       ctx.fillStyle = hexToRgba(p.color, a);
-      ctx.arc(x, y, p.r * a, 0, Math.PI * 2);
+      ctx.arc(p.x - camera.x, p.y - camera.y, p.r * a, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  drawPointerGuide(input, player, camera) {
-    if (!input.active) return;
+  drawFloats(floats, camera) {
     const ctx = this.ctx;
-    const px = player.x - camera.x;
-    const py = player.y - camera.y;
-    ctx.beginPath();
-    ctx.strokeStyle = "rgba(232,244,242,0.18)";
-    ctx.lineWidth = 1;
-    ctx.moveTo(px, py);
-    ctx.lineTo(input.x, input.y);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.fillStyle = "rgba(62,207,176,0.35)";
-    ctx.arc(input.x, input.y, 8, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.textAlign = "center";
+    ctx.font = "13px -apple-system, BlinkMacSystemFont, sans-serif";
+    for (const f of floats) {
+      const a = Math.max(0, f.life / f.maxLife);
+      ctx.fillStyle = hexToRgba(f.color, a);
+      ctx.fillText(f.text, f.x - camera.x, f.y - camera.y - (1 - a) * 28);
+    }
   }
 
-  render(level, camera, input, openPortal) {
+  render(level, camera, canEvolve, portalOpen) {
     this.time += 0.016;
-    this.clear(level.depth);
-    this.drawAmbient(camera, level.depth);
-    this.drawFood(level.foods, camera);
-    this.drawPortal(level.portal, camera, openPortal);
+    this.clear(level.layer);
+    this.drawAmbient(level.layer);
+    this.drawPortal(level.portal, camera, portalOpen);
+    this.drawProteins(level.proteins, camera);
+    this.drawDnas(level.dnas, camera, canEvolve);
     for (const c of level.creatures) this.drawCreature(c, camera);
     this.drawCreature(level.player, camera);
     this.drawParticles(level.particles, camera);
-    this.drawPointerGuide(input, level.player, camera);
+    this.drawFloats(level.floats, camera);
   }
 }

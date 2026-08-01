@@ -1,149 +1,213 @@
-import { PLAYER } from "./config.js";
+import { EVOLUTIONS, PLAYER } from "./config.js";
 
 let nextId = 1;
 
-function clamp(v, min, max) {
+export function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
-function length(x, y) {
+export function length(x, y) {
   return Math.hypot(x, y);
 }
 
-function normalize(x, y) {
+export function normalize(x, y) {
   const len = length(x, y) || 1;
   return { x: x / len, y: y / len };
 }
 
-export function massToRadius(mass) {
-  return 7 + Math.sqrt(mass) * 6.2;
+function makeNuclei(count, radius) {
+  if (count <= 1) {
+    return [{ ox: 0, oy: 0, alive: true, r: radius * PLAYER.nucleusRadiusFactor }];
+  }
+  const nuclei = [];
+  for (let i = 0; i < count; i += 1) {
+    const a = (Math.PI * 2 * i) / count - Math.PI / 2;
+    const dist = radius * (0.38 + (i % 2) * 0.08);
+    nuclei.push({
+      ox: Math.cos(a) * dist,
+      oy: Math.sin(a) * dist,
+      alive: true,
+      r: radius * PLAYER.nucleusRadiusFactor * 0.85,
+    });
+  }
+  return nuclei;
 }
 
-export function createCreature({
-  x,
-  y,
-  mass,
-  hue,
-  isPlayer = false,
-  isPredator = false,
-  depthAccent = "#3ecfb0",
-}) {
-  const radius = massToRadius(mass);
+export function createPlayer(x, y, evolutionId = 0) {
+  const evo = EVOLUTIONS[evolutionId];
   const segments = [];
-  const segmentCount = Math.max(4, Math.floor(3 + mass * 1.6));
-  for (let i = 0; i < segmentCount; i += 1) {
-    segments.push({ x: x - i * PLAYER.segmentSpacing * 0.4, y });
+  for (let i = 0; i < evo.segmentCount; i += 1) {
+    segments.push({ x: x - i * PLAYER.segmentSpacing * 0.5, y });
   }
-
   return {
     id: nextId++,
+    kind: "player",
     x,
     y,
     vx: 0,
     vy: 0,
     angle: 0,
-    mass,
-    radius,
-    hue,
-    isPlayer,
-    isPredator,
-    depthAccent,
+    evolutionId,
+    radius: evo.radius,
+    color: evo.color,
+    coreColor: evo.coreColor,
     segments,
-    pulse: Math.random() * Math.PI * 2,
-    hurtTimer: 0,
+    nuclei: makeNuclei(evo.nuclei, evo.radius),
+    pulse: 0,
+    boostTimer: 0,
+    boostCooldown: 0,
+    invuln: 0,
     alive: true,
+  };
+}
+
+export function applyEvolution(player, evolutionId) {
+  const evo = EVOLUTIONS[evolutionId];
+  player.evolutionId = evolutionId;
+  player.radius = evo.radius;
+  player.color = evo.color;
+  player.coreColor = evo.coreColor;
+  player.nuclei = makeNuclei(evo.nuclei, evo.radius);
+  while (player.segments.length < evo.segmentCount) {
+    const last = player.segments[player.segments.length - 1];
+    player.segments.push({ x: last.x, y: last.y });
+  }
+  while (player.segments.length > evo.segmentCount) player.segments.pop();
+  player.invuln = 1.2;
+}
+
+export function createNormal(x, y, layer, evolutionFloor = 0) {
+  const tier = clamp(evolutionFloor + Math.floor(Math.random() * 2), 0, EVOLUTIONS.length - 1);
+  const evo = EVOLUTIONS[tier];
+  const radius = evo.radius * (0.75 + Math.random() * 0.45);
+  const segments = [];
+  const count = Math.max(3, evo.segmentCount - 1);
+  for (let i = 0; i < count; i += 1) {
+    segments.push({ x: x - i * 8, y });
+  }
+  return {
+    id: nextId++,
+    kind: "normal",
+    x,
+    y,
+    vx: 0,
+    vy: 0,
+    angle: Math.random() * Math.PI * 2,
+    radius,
+    color: layer.accent,
+    coreColor: "#e8f4f2",
+    segments,
+    nuclei: makeNuclei(1, radius),
+    pulse: Math.random() * 10,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
+    aggro: 0.35 + Math.random() * 0.35,
+    alive: true,
+    dropProtein: 2 + Math.floor(Math.random() * 3),
+    dropDna: Math.random() < 0.45 ? 1 : 0,
+  };
+}
+
+export function createBoss(x, y, layer) {
+  const b = layer.boss;
+  const segments = [];
+  for (let i = 0; i < 14; i += 1) {
+    segments.push({ x: x - i * 12, y });
+  }
+  return {
+    id: nextId++,
+    kind: "boss",
+    name: b.name,
+    x,
+    y,
+    vx: 0,
+    vy: 0,
+    angle: 0,
+    radius: b.radius,
+    color: b.color,
+    coreColor: "#ffe0dc",
+    segments,
+    nuclei: makeNuclei(b.nuclei, b.radius),
+    pulse: 0,
+    wanderAngle: 0,
+    wanderTimer: 0,
+    aggro: 1,
+    alive: true,
+    dropProtein: 10 + b.nuclei * 2,
+    dropDna: 2 + Math.floor(b.nuclei / 2),
   };
 }
 
 export function syncSegments(creature) {
-  const targetCount = Math.max(4, Math.floor(3 + creature.mass * 1.6));
-  while (creature.segments.length < targetCount) {
-    const last = creature.segments[creature.segments.length - 1] || {
-      x: creature.x,
-      y: creature.y,
-    };
-    creature.segments.push({ x: last.x, y: last.y });
-  }
-  while (creature.segments.length > targetCount) {
-    creature.segments.pop();
-  }
-
-  creature.segments[0].x = creature.x;
-  creature.segments[0].y = creature.y;
-
-  const spacing = PLAYER.segmentSpacing * (0.85 + Math.min(creature.mass, 20) * 0.015);
-  for (let i = 1; i < creature.segments.length; i += 1) {
-    const prev = creature.segments[i - 1];
-    const curr = creature.segments[i];
+  const segs = creature.segments;
+  if (!segs.length) return;
+  segs[0].x = creature.x;
+  segs[0].y = creature.y;
+  const spacing = PLAYER.segmentSpacing * (0.85 + creature.radius * 0.008);
+  for (let i = 1; i < segs.length; i += 1) {
+    const prev = segs[i - 1];
+    const curr = segs[i];
     const dx = prev.x - curr.x;
     const dy = prev.y - curr.y;
     const dist = length(dx, dy) || 1;
-    const nx = dx / dist;
-    const ny = dy / dist;
-    curr.x = prev.x - nx * spacing;
-    curr.y = prev.y - ny * spacing;
+    curr.x = prev.x - (dx / dist) * spacing;
+    curr.y = prev.y - (dy / dist) * spacing;
   }
 }
 
-export function grow(creature, amount) {
-  creature.mass += amount;
-  creature.radius = massToRadius(creature.mass);
-  syncSegments(creature);
+export function aliveNuclei(creature) {
+  return creature.nuclei.filter((n) => n.alive);
 }
 
-export function shrink(creature, amount) {
-  creature.mass = Math.max(0.8, creature.mass - amount);
-  creature.radius = massToRadius(creature.mass);
-  syncSegments(creature);
-  creature.hurtTimer = PLAYER.damageCooldown;
+export function nucleusWorldPos(creature, nucleus) {
+  const c = Math.cos(creature.angle);
+  const s = Math.sin(creature.angle);
+  return {
+    x: creature.x + nucleus.ox * c - nucleus.oy * s,
+    y: creature.y + nucleus.ox * s + nucleus.oy * c,
+    r: nucleus.r,
+  };
 }
 
-export function updatePlayer(creature, input, camera, dt) {
-  if (!input.active) {
-    creature.vx *= Math.pow(0.08, dt);
-    creature.vy *= Math.pow(0.08, dt);
-    creature.x += creature.vx * dt;
-    creature.y += creature.vy * dt;
-    creature.pulse += dt * 2.2;
-    syncSegments(creature);
-    return;
+export function updatePlayer(player, input, dt) {
+  if (player.boostCooldown > 0) player.boostCooldown -= dt;
+  if (player.boostTimer > 0) player.boostTimer -= dt;
+  if (player.invuln > 0) player.invuln -= dt;
+
+  if (input.boostPressed && player.boostTimer <= 0 && player.boostCooldown <= 0) {
+    player.boostTimer = PLAYER.boostDuration;
+    player.boostCooldown = PLAYER.boostCooldown;
   }
 
-  const worldX = camera.x + input.x;
-  const worldY = camera.y + input.y;
-  const dx = worldX - creature.x;
-  const dy = worldY - creature.y;
-  const dist = length(dx, dy);
-  const dir = normalize(dx, dy);
-  const targetAngle = Math.atan2(dir.y, dir.x);
+  const boosting = player.boostTimer > 0;
+  const speed = boosting ? PLAYER.boostSpeed : PLAYER.baseSpeed;
 
-  let delta = targetAngle - creature.angle;
-  while (delta > Math.PI) delta -= Math.PI * 2;
-  while (delta < -Math.PI) delta += Math.PI * 2;
-  creature.angle += delta * clamp(PLAYER.turnRate * dt, 0, 1);
+  if (input.moving) {
+    const targetAngle = Math.atan2(input.dirY, input.dirX);
+    let delta = targetAngle - player.angle;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    player.angle += delta * clamp(PLAYER.turnRate * dt, 0, 1);
 
-  const speedFactor = clamp(dist / 140, 0.25, 1);
-  const speed =
-    (dist > 60 ? PLAYER.boostSpeed : PLAYER.baseSpeed) *
-    speedFactor *
-    (1 / (1 + creature.mass * 0.03));
+    const mag = clamp(Math.hypot(input.dirX, input.dirY), 0, 1);
+    player.vx = Math.cos(player.angle) * speed * mag;
+    player.vy = Math.sin(player.angle) * speed * mag;
+  } else {
+    player.vx *= Math.pow(0.04, dt);
+    player.vy *= Math.pow(0.04, dt);
+  }
 
-  creature.vx = Math.cos(creature.angle) * speed;
-  creature.vy = Math.sin(creature.angle) * speed;
-  creature.x += creature.vx * dt;
-  creature.y += creature.vy * dt;
-  creature.pulse += dt * (2.6 + speedFactor);
-  if (creature.hurtTimer > 0) creature.hurtTimer -= dt;
-  syncSegments(creature);
+  player.x += player.vx * dt;
+  player.y += player.vy * dt;
+  player.pulse += dt * (boosting ? 4.2 : 2.2);
+  syncSegments(player);
 }
 
-export function updateNpc(creature, player, foods, dt, world) {
+export function updateEnemy(creature, player, dt, world) {
   creature.wanderTimer -= dt;
   if (creature.wanderTimer <= 0) {
-    creature.wanderTimer = 0.6 + Math.random() * 1.4;
-    creature.wanderAngle += (Math.random() - 0.5) * 1.8;
+    creature.wanderTimer = 0.5 + Math.random() * 1.2;
+    creature.wanderAngle += (Math.random() - 0.5) * 2;
   }
 
   let tx = Math.cos(creature.wanderAngle);
@@ -151,32 +215,19 @@ export function updateNpc(creature, player, foods, dt, world) {
 
   const toPlayerX = player.x - creature.x;
   const toPlayerY = player.y - creature.y;
-  const distPlayer = length(toPlayerX, toPlayerY);
+  const dist = length(toPlayerX, toPlayerY);
+  const chaseRange = creature.kind === "boss" ? 620 : 280;
 
-  if (creature.isPredator || creature.mass > player.mass * 1.15) {
-    if (distPlayer < 420) {
-      const n = normalize(toPlayerX, toPlayerY);
-      tx = n.x * 1.4 + tx * 0.2;
-      ty = n.y * 1.4 + ty * 0.2;
-    }
-  } else if (distPlayer < 220 && player.mass > creature.mass * 1.1) {
+  if (dist < chaseRange) {
     const n = normalize(toPlayerX, toPlayerY);
-    tx = -n.x * 1.5 + tx * 0.2;
-    ty = -n.y * 1.5 + ty * 0.2;
-  } else {
-    let nearest = null;
-    let nearestDist = 220;
-    for (const food of foods) {
-      const d = length(food.x - creature.x, food.y - creature.y);
-      if (d < nearestDist) {
-        nearestDist = d;
-        nearest = food;
-      }
-    }
-    if (nearest) {
-      const n = normalize(nearest.x - creature.x, nearest.y - creature.y);
-      tx = n.x + tx * 0.35;
-      ty = n.y + ty * 0.35;
+    const weight = creature.kind === "boss" ? 1.8 : creature.aggro;
+    // 普通生物略躲避更强玩家；Boss 始终攻击
+    if (creature.kind === "normal" && player.radius > creature.radius * 1.25) {
+      tx = -n.x * 1.2 + tx * 0.3;
+      ty = -n.y * 1.2 + ty * 0.3;
+    } else {
+      tx = n.x * weight + tx * 0.25;
+      ty = n.y * weight + ty * 0.25;
     }
   }
 
@@ -185,18 +236,14 @@ export function updateNpc(creature, player, foods, dt, world) {
   let delta = targetAngle - creature.angle;
   while (delta > Math.PI) delta -= Math.PI * 2;
   while (delta < -Math.PI) delta += Math.PI * 2;
-  creature.angle += delta * clamp(3.8 * dt, 0, 1);
+  creature.angle += delta * clamp((creature.kind === "boss" ? 3.2 : 2.6) * dt, 0, 1);
 
-  const speed = (70 + Math.min(creature.mass, 16) * 4) * (creature.isPredator ? 1.15 : 1);
+  const base = creature.kind === "boss" ? 78 : 62;
+  const speed = base + Math.min(40, creature.radius * 0.25);
   creature.vx = Math.cos(creature.angle) * speed;
   creature.vy = Math.sin(creature.angle) * speed;
-  creature.x += creature.vx * dt;
-  creature.y += creature.vy * dt;
-
-  creature.x = clamp(creature.x, 40, world.width - 40);
-  creature.y = clamp(creature.y, 40, world.height - 40);
-
-  creature.pulse += dt * 2.1;
-  if (creature.hurtTimer > 0) creature.hurtTimer -= dt;
+  creature.x = clamp(creature.x + creature.vx * dt, 50, world.width - 50);
+  creature.y = clamp(creature.y + creature.vy * dt, 50, world.height - 50);
+  creature.pulse += dt * 2;
   syncSegments(creature);
 }

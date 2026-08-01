@@ -1,34 +1,40 @@
-import { DEPTHS, PLAYER, WORLD } from "./config.js";
+import { EVOLUTIONS, LAYERS, PLAYER, WORLD } from "./config.js";
 import {
   updatePlayer,
-  updateNpc,
-  grow,
-  shrink,
+  updateEnemy,
+  applyEvolution,
+  aliveNuclei,
+  nucleusWorldPos,
+  clamp,
 } from "./creature.js";
 import {
   createLevel,
   spawnBurst,
-  spawnFoodNear,
-  maintainPopulation,
-  canDescend,
+  spawnFloatText,
+  decomposeCreature,
+  maintainPickups,
 } from "./world.js";
 import { Renderer } from "./renderer.js";
 import { Input } from "./input.js";
 
 export class Game {
-  constructor({ canvas, hud, overlay }) {
+  constructor({ canvas, controlsRoot, hud, overlay }) {
     this.canvas = canvas;
     this.hud = hud;
     this.overlay = overlay;
     this.renderer = new Renderer(canvas);
-    this.input = new Input(canvas);
+    this.input = new Input(controlsRoot);
     this.level = null;
     this.camera = { x: 0, y: 0 };
     this.running = false;
     this.ended = false;
     this.raf = 0;
     this.last = 0;
-    this.idleHintTimer = 0;
+    this.playerState = {
+      evolutionId: 0,
+      points: 0,
+      evolvedThisLayer: false,
+    };
     this.onStateChange = null;
   }
 
@@ -41,15 +47,18 @@ export class Game {
     });
   }
 
-  start(depthIndex = 0, carryMass = PLAYER.startMass) {
-    this.level = createLevel(depthIndex, carryMass);
+  start(layerIndex = 0, resetProgress = true) {
+    if (resetProgress) {
+      this.playerState = { evolutionId: 0, points: 0, evolvedThisLayer: false };
+    }
+    this.level = createLevel(layerIndex, this.playerState);
     this.ended = false;
     this.running = true;
-    this.idleHintTimer = 0;
     this._centerCamera(true);
     this._updateHud();
     this.overlay.hide();
     this.hud.show();
+    this.input.show();
     this.last = performance.now();
     cancelAnimationFrame(this.raf);
     this.raf = requestAnimationFrame((t) => this._loop(t));
@@ -59,6 +68,7 @@ export class Game {
   stop() {
     this.running = false;
     cancelAnimationFrame(this.raf);
+    this.input.hide();
   }
 
   goHome() {
@@ -70,26 +80,39 @@ export class Game {
 
   _centerCamera(hard = false) {
     const targetX = this.level.player.x - this.renderer.w * 0.5;
-    const targetY = this.level.player.y - this.renderer.h * 0.45;
+    const targetY = this.level.player.y - this.renderer.h * 0.48;
     if (hard) {
       this.camera.x = targetX;
       this.camera.y = targetY;
       return;
     }
-    this.camera.x += (targetX - this.camera.x) * 0.12;
-    this.camera.y += (targetY - this.camera.y) * 0.12;
+    this.camera.x += (targetX - this.camera.x) * 0.14;
+    this.camera.y += (targetY - this.camera.y) * 0.14;
   }
 
-  _clampPlayer() {
-    const p = this.level.player;
-    p.x = Math.max(30, Math.min(WORLD.width - 30, p.x));
-    p.y = Math.max(30, Math.min(WORLD.height - 30, p.y));
+  _canEvolve() {
+    const evo = EVOLUTIONS[this.level.player.evolutionId];
+    return this.level.points >= evo.pointsToEvolve && evo.pointsToEvolve !== Infinity;
+  }
+
+  _portalOpen() {
+    // 进化后可前往上一层生物圈
+    return this.level.evolvedThisLayer && this.level.layerIndex < LAYERS.length - 1;
   }
 
   _updateHud() {
-    const depth = this.level.depth;
-    this.hud.setDepth(depth.name);
-    this.hud.setMass(this.level.player.mass);
+    const player = this.level.player;
+    const evo = EVOLUTIONS[player.evolutionId];
+    const need = evo.pointsToEvolve;
+    this.hud.setInfo({
+      layer: this.level.layer.name,
+      form: evo.name,
+      points: this.level.points,
+      need: need === Infinity ? "MAX" : need,
+      canEvolve: this._canEvolve(),
+      boostReady: player.boostCooldown <= 0 && player.boostTimer <= 0,
+      boosting: player.boostTimer > 0,
+    });
   }
 
   _loop(now) {
@@ -97,9 +120,7 @@ export class Game {
     const dt = Math.min(0.033, (now - this.last) / 1000 || 0.016);
     this.last = now;
     this._update(dt);
-    const open = canDescend(this.level);
-    if (this.level.portal) this.level.portal.open = open;
-    this.renderer.render(this.level, this.camera, this.input, open);
+    this.renderer.render(this.level, this.camera, this._canEvolve(), this._portalOpen());
     this.raf = requestAnimationFrame((t) => this._loop(t));
   }
 
@@ -108,137 +129,192 @@ export class Game {
     const level = this.level;
     const player = level.player;
 
-    if (!this.input.active) {
-      this.idleHintTimer += dt;
-      this.hud.setIdleHint(this.idleHintTimer > 1.2);
-    } else {
-      this.idleHintTimer = 0;
-      this.hud.setIdleHint(false);
-    }
-
-    updatePlayer(player, this.input, this.camera, dt);
-    this._clampPlayer();
+    updatePlayer(player, this.input, dt);
+    player.x = clamp(player.x, 40, WORLD.width - 40);
+    player.y = clamp(player.y, 40, WORLD.height - 40);
 
     for (const c of level.creatures) {
-      updateNpc(c, player, level.foods, dt, level.world);
+      updateEnemy(c, player, dt, level.world);
     }
 
-    // foods
-    for (let i = level.foods.length - 1; i >= 0; i -= 1) {
-      const f = level.foods[i];
-      f.phase += dt;
-      if (Math.hypot(f.x - player.x, f.y - player.y) < player.radius + f.r) {
-        grow(player, 0.08);
-        spawnBurst(level, f.x, f.y, f.color, 5);
-        level.foods.splice(i, 1);
+    this._collectPickups();
+    this._resolveNucleusCombat();
+    this._updateVfx(dt);
+    this._updatePortal(dt);
+
+    maintainPickups(level);
+    this.playerState.points = level.points;
+    this.playerState.evolutionId = player.evolutionId;
+    this.playerState.evolvedThisLayer = level.evolvedThisLayer;
+    this._centerCamera(false);
+    this._updateHud();
+
+    // 最终形态且击败最终 Boss
+    if (
+      level.layerIndex === LAYERS.length - 1 &&
+      level.bossDefeated &&
+      player.evolutionId >= EVOLUTIONS.length - 1
+    ) {
+      this._end("成为主宰", "你已从原核细胞演化至病毒聚合体，微观之海臣服于你。");
+    }
+  }
+
+  _collectPickups() {
+    const level = this.level;
+    const player = level.player;
+
+    for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
+      const p = level.proteins[i];
+      p.phase += 0.05;
+      if (Math.hypot(p.x - player.x, p.y - player.y) < player.radius + p.r) {
+        level.points += p.value;
+        spawnBurst(level, p.x, p.y, p.color, 4);
+        spawnFloatText(level, p.x, p.y, "+1", p.color);
+        level.proteins.splice(i, 1);
+      }
+    }
+
+    const canEvolve = this._canEvolve();
+    for (let i = level.dnas.length - 1; i >= 0; i -= 1) {
+      const d = level.dnas[i];
+      d.phase += 0.04;
+      if (!canEvolve) continue;
+      if (Math.hypot(d.x - player.x, d.y - player.y) < player.radius + d.r) {
+        level.dnas.splice(i, 1);
+        this._evolve();
+        break;
+      }
+    }
+  }
+
+  _evolve() {
+    const level = this.level;
+    const player = level.player;
+    const next = player.evolutionId + 1;
+    if (next >= EVOLUTIONS.length) return;
+
+    const evo = EVOLUTIONS[next];
+    applyEvolution(player, next);
+    level.points = 0;
+    level.evolvedThisLayer = true;
+    spawnBurst(level, player.x, player.y, evo.color, 28);
+    spawnFloatText(level, player.x, player.y - 30, `进化·${evo.name}`, evo.color);
+
+    // 开启通往上一层的通道
+    if (level.portal && level.layerIndex < LAYERS.length - 1) {
+      level.portal.open = true;
+    }
+  }
+
+  _resolveNucleusCombat() {
+    const level = this.level;
+    const player = level.player;
+    if (!player.alive) return;
+
+    const playerNucleus = aliveNuclei(player)[0];
+    if (!playerNucleus) {
+      this._end("细胞核被吞噬", "你的细胞核被吞食，生命终止。");
+      return;
+    }
+    const pN = nucleusWorldPos(player, playerNucleus);
+
+    for (let i = level.creatures.length - 1; i >= 0; i -= 1) {
+      const enemy = level.creatures[i];
+      if (!enemy.alive) continue;
+
+      // 玩家吞敌方细胞核
+      for (const n of enemy.nuclei) {
+        if (!n.alive) continue;
+        const eN = nucleusWorldPos(enemy, n);
+        const eatRange = pN.r + eN.r + PLAYER.eatRangeBonus;
+        if (Math.hypot(pN.x - eN.x, pN.y - eN.y) < eatRange) {
+          // 需要体型接近或更大才能稳定吞噬核
+          if (player.radius + 8 >= enemy.radius * 0.55) {
+            n.alive = false;
+            spawnBurst(level, eN.x, eN.y, enemy.coreColor, 8);
+            spawnFloatText(level, eN.x, eN.y, "核破", enemy.coreColor);
+          }
+        }
+      }
+
+      if (aliveNuclei(enemy).length === 0) {
+        enemy.alive = false;
+        decomposeCreature(level, enemy);
+        if (enemy.kind === "boss") {
+          level.bossDefeated = true;
+          level.points += 8;
+          spawnFloatText(level, enemy.x, enemy.y - 40, "Boss 分解", enemy.color);
+        } else {
+          level.points += 3;
+        }
+        level.creatures.splice(i, 1);
         continue;
       }
-      for (const c of level.creatures) {
-        if (Math.hypot(f.x - c.x, f.y - c.y) < c.radius + f.r) {
-          grow(c, 0.05);
-          level.foods.splice(i, 1);
-          break;
-        }
-      }
-    }
 
-    // creature interactions with player
-    for (let i = level.creatures.length - 1; i >= 0; i -= 1) {
-      const c = level.creatures[i];
-      const dist = Math.hypot(c.x - player.x, c.y - player.y);
-      const touch = dist < player.radius * 0.85 + c.radius * 0.85;
-      if (!touch) continue;
-
-      if (player.mass > c.mass * (1 / PLAYER.eatRatio)) {
-        grow(player, c.mass * 0.45);
-        spawnBurst(level, c.x, c.y, c.hue, 14);
-        spawnFoodNear(level, c.x, c.y, 2);
-        level.creatures.splice(i, 1);
-      } else if (c.mass > player.mass * (1 / PLAYER.eatRatio) && player.hurtTimer <= 0) {
-        if (c.mass > player.mass * 1.8) {
-          this._gameOver("被吞噬了", "更大的生命吞没了你。从表层再次启程？");
-          spawnBurst(level, player.x, player.y, player.hue, 20);
+      // 敌方吞玩家细胞核 → 结束
+      if (player.invuln > 0) continue;
+      for (const n of enemy.nuclei) {
+        if (!n.alive) continue;
+        const eN = nucleusWorldPos(enemy, n);
+        // Boss / 攻击性生物的核可吞噬玩家核
+        const threat =
+          enemy.kind === "boss" || enemy.radius >= player.radius * 0.85;
+        if (!threat) continue;
+        if (Math.hypot(eN.x - pN.x, eN.y - pN.y) < eN.r + pN.r + 2) {
+          playerNucleus.alive = false;
+          player.alive = false;
+          spawnBurst(level, pN.x, pN.y, player.coreColor, 22);
+          this._end(
+            "细胞核被吞噬",
+            enemy.kind === "boss"
+              ? `${enemy.name} 吞噬了你的细胞核。`
+              : "敌方生物吞噬了你的细胞核。"
+          );
           return;
         }
-        shrink(player, Math.min(player.mass * 0.28, c.mass * 0.2));
-        spawnBurst(level, player.x, player.y, "#e07a6a", 10);
-        // knockback
-        const nx = (player.x - c.x) / (dist || 1);
-        const ny = (player.y - c.y) / (dist || 1);
-        player.x += nx * 28;
-        player.y += ny * 28;
       }
     }
+  }
 
-    // npc eat each other lightly
-    for (let i = 0; i < level.creatures.length; i += 1) {
-      for (let j = i + 1; j < level.creatures.length; j += 1) {
-        const a = level.creatures[i];
-        const b = level.creatures[j];
-        const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (d >= a.radius * 0.8 + b.radius * 0.8) continue;
-        if (a.mass > b.mass * 1.25) {
-          grow(a, b.mass * 0.3);
-          level.creatures.splice(j, 1);
-          j -= 1;
-        } else if (b.mass > a.mass * 1.25) {
-          grow(b, a.mass * 0.3);
-          level.creatures.splice(i, 1);
-          i -= 1;
-          break;
-        }
-      }
-    }
-
-    // particles
+  _updateVfx(dt) {
+    const level = this.level;
     for (let i = level.particles.length - 1; i >= 0; i -= 1) {
       const p = level.particles[i];
       p.life -= dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vx *= 0.96;
-      p.vy *= 0.96;
+      p.vx *= 0.95;
+      p.vy *= 0.95;
       if (p.life <= 0) level.particles.splice(i, 1);
     }
+    for (let i = level.floats.length - 1; i >= 0; i -= 1) {
+      const f = level.floats[i];
+      f.life -= dt;
+      f.y -= 22 * dt;
+      if (f.life <= 0) level.floats.splice(i, 1);
+    }
+  }
 
-    if (level.portal) {
-      level.portal.pulse += dt;
-      if (canDescend(level)) {
-        const d = Math.hypot(player.x - level.portal.x, player.y - level.portal.y);
-        if (d < level.portal.r * 0.85) {
-          this._descend();
-          return;
-        }
+  _updatePortal(dt) {
+    const level = this.level;
+    if (!level.portal) return;
+    level.portal.pulse += dt;
+    level.portal.open = this._portalOpen();
+    if (!level.portal.open) return;
+
+    const player = level.player;
+    if (Math.hypot(player.x - level.portal.x, player.y - level.portal.y) < level.portal.r) {
+      const next = level.layerIndex + 1;
+      if (next < LAYERS.length) {
+        this.playerState.evolvedThisLayer = false;
+        this.start(next, false);
       }
     }
-
-    maintainPopulation(level);
-    this._centerCamera(false);
-    this._updateHud();
-
-    // win at abyss bottom with huge mass
-    if (
-      level.depthIndex === DEPTHS.length - 1 &&
-      player.mass >= 48
-    ) {
-      this._gameOver(
-        "成为主宰",
-        `你在渊底成长到质量 ${player.mass.toFixed(0)}，微观之海因你而颤动。`
-      );
-    }
   }
 
-  _descend() {
-    const next = this.level.depthIndex + 1;
-    if (next >= DEPTHS.length) return;
-    const carry = this.level.player.mass * 0.72;
-    spawnBurst(this.level, this.level.player.x, this.level.player.y, "#3ecfb0", 24);
-    this.start(next, Math.max(2, carry));
-  }
-
-  _gameOver(title, text) {
+  _end(title, text) {
     this.ended = true;
-    this.hud.setIdleHint(false);
+    this.input.hide();
     this.overlay.show(title, text);
     this.onStateChange?.("overlay");
   }
