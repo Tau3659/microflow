@@ -1,10 +1,5 @@
-import { EVOLUTIONS, MORPH, PARALLAX, WARNING } from "./config.js";
-import {
-  aliveNuclei,
-  allMouthsWorldPos,
-  isAggressive,
-  nucleusWorldPos,
-} from "./creature.js";
+import { MORPH, PARALLAX, WARNING } from "./config.js";
+import { allMouthsWorldPos, isAggressive, nucleusWorldPos } from "./creature.js";
 
 function hexToRgba(hex, alpha) {
   const h = hex.replace("#", "");
@@ -660,11 +655,18 @@ export class Renderer {
       (headX, headY, ox, oy) => {
         ctx.save();
         ctx.translate(headX, headY);
+        // 若隐若现的半透明胞体
+        const shimmer =
+          0.58 +
+          Math.sin(creature.pulse * 1.55) * 0.12 +
+          Math.sin(this.time * 2.2 + (creature.id || 0) * 0.7) * 0.1;
+        const bodyAlpha = (creature.kind === "player" ? 0.78 : 0.64) * shimmer;
+
         if (creature.kind === "player" && creature.boostTimer > 0) {
           ctx.beginPath();
-          ctx.strokeStyle = hexToRgba("#e8c27a", 0.45);
-          ctx.lineWidth = 2;
-          ctx.arc(0, 0, creature.radius * 1.4, 0, Math.PI * 2);
+          ctx.strokeStyle = hexToRgba("#e8c27a", 0.28 * shimmer);
+          ctx.lineWidth = 1.6;
+          ctx.arc(0, 0, creature.radius * 1.35, 0, Math.PI * 2);
           ctx.stroke();
         }
         // 进化过渡：旧形态淡出、新形态淡入，体现成长而非瞬变
@@ -672,17 +674,10 @@ export class Renderer {
           const mix = creature.morphMix || 0;
           const from = { ...creature, ...creature.renderFrom, radius: creature.radius };
           const to = { ...creature, ...creature.renderTo, radius: creature.radius };
-          this.drawMorphBody(from, (1 - mix) * 0.95, false);
-          this.drawMorphBody(to, mix * 0.95, false);
-          if (mix > 0.15 && mix < 0.9) {
-            ctx.beginPath();
-            ctx.strokeStyle = hexToRgba(creature.coreColor || "#e8f4f2", 0.35 + Math.sin(this.time * 8) * 0.15);
-            ctx.lineWidth = 2;
-            ctx.arc(0, 0, creature.radius * (1.05 + mix * 0.2), 0, Math.PI * 2);
-            ctx.stroke();
-          }
+          this.drawMorphBody(from, (1 - mix) * bodyAlpha, false);
+          this.drawMorphBody(to, mix * bodyAlpha, false);
         } else {
-          this.drawMorphBody(creature, creature.kind === "player" ? 1 : 0.92, false);
+          this.drawMorphBody(creature, bodyAlpha, false);
         }
         ctx.restore();
 
@@ -697,23 +692,18 @@ export class Renderer {
           ctx.rotate(mouth.facing || creature.angle);
           const open = 0.72 + Math.sin(creature.pulse * 2.4 + mi) * 0.22;
           const lip = ctx.createRadialGradient(-mouth.r * 0.2, 0, 1, 0, 0, mouth.r);
-          lip.addColorStop(0, hexToRgba("#1a3036", 0.95));
-          lip.addColorStop(0.55, hexToRgba("#031016", 0.9));
-          lip.addColorStop(1, hexToRgba(creature.membrane || creature.color, 0.35));
+          lip.addColorStop(0, hexToRgba("#1a3036", 0.72));
+          lip.addColorStop(0.55, hexToRgba("#031016", 0.65));
+          lip.addColorStop(1, hexToRgba(creature.membrane || creature.color, 0.22));
           ctx.beginPath();
           ctx.fillStyle = lip;
           ctx.strokeStyle = hexToRgba(
             creature.kind === "player" ? "#e8c27a" : creature.coreColor || creature.color,
-            creature.kind === "player" ? 0.9 : 0.65
+            (creature.kind === "player" ? 0.7 : 0.5) * shimmer
           );
-          ctx.lineWidth = 1.8;
+          ctx.lineWidth = 1.5;
           ctx.ellipse(0, 0, mouth.r * open, mouth.r * 0.58, 0, 0, Math.PI * 2);
           ctx.fill();
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.strokeStyle = hexToRgba("#e8f4f2", 0.4);
-          ctx.lineWidth = 1.1;
-          ctx.arc(mouth.r * 0.12, 0, mouth.r * 0.5, -1.0, 1.0);
           ctx.stroke();
           ctx.restore();
         }
@@ -724,90 +714,37 @@ export class Renderer {
           const nx = wp.x + ox - camera.x;
           const ny = wp.y + oy - camera.y;
           const pulse = 1 + Math.sin(creature.pulse + nx * 0.01) * 0.06;
+          const nAlpha = 0.55 + shimmer * 0.35;
           const ng = ctx.createRadialGradient(nx - wp.r * 0.25, ny - wp.r * 0.25, 1, nx, ny, wp.r * 1.35);
-          ng.addColorStop(0, hexToRgba("#ffffff", 0.75));
-          ng.addColorStop(0.35, hexToRgba(creature.coreColor, 0.95));
-          ng.addColorStop(1, hexToRgba(creature.coreColor, 0.05));
+          ng.addColorStop(0, hexToRgba("#ffffff", 0.55 * nAlpha));
+          ng.addColorStop(0.35, hexToRgba(creature.coreColor, 0.75 * nAlpha));
+          ng.addColorStop(1, hexToRgba(creature.coreColor, 0.02));
           ctx.beginPath();
           ctx.fillStyle = ng;
           ctx.shadowColor = creature.coreColor;
-          ctx.shadowBlur = 14;
+          ctx.shadowBlur = 10;
           ctx.arc(nx, ny, wp.r * pulse, 0, Math.PI * 2);
           ctx.fill();
-          ctx.beginPath();
-          ctx.strokeStyle = hexToRgba("#e8f4f2", 0.35);
-          ctx.lineWidth = 1;
           ctx.shadowBlur = 0;
-          ctx.arc(nx, ny, wp.r * 1.15 * pulse, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.fillStyle = hexToRgba("#031016", 0.5);
-          ctx.arc(nx + wp.r * 0.1, ny + wp.r * 0.05, wp.r * 0.32, 0, Math.PI * 2);
-          ctx.fill();
         }
 
-        // 攻击性：明显警告色环 + 斜纹警示
+        // 攻击性仅保留极淡色晕，去掉环与三角等非必要 UI
         if (isAggressive(creature) || creature.warning) {
-          const flash = creature.provokeFlash > 0 ? 0.25 : 0;
-          const ringR = creature.radius * (1.28 + Math.sin(this.time * 6) * 0.04);
+          const flash = creature.provokeFlash > 0 ? 0.12 : 0;
+          const g = ctx.createRadialGradient(
+            headX,
+            headY,
+            creature.radius * 0.4,
+            headX,
+            headY,
+            creature.radius * 1.35
+          );
+          g.addColorStop(0, hexToRgba(WARNING.color, 0.08 + flash));
+          g.addColorStop(1, hexToRgba(WARNING.color, 0));
+          ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.strokeStyle = hexToRgba(WARNING.color, 0.55 + flash);
-          ctx.lineWidth = 2.4;
-          ctx.arc(headX, headY, ringR, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.strokeStyle = hexToRgba(WARNING.stripe, 0.7 + flash);
-          ctx.lineWidth = 2;
-          ctx.setLineDash([5, 5]);
-          ctx.lineDashOffset = -this.time * 28;
-          ctx.arc(headX, headY, ringR + 5, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          // 警示三角小标记
-          ctx.fillStyle = hexToRgba(WARNING.stripe, 0.85);
-          ctx.beginPath();
-          const ty = headY - creature.radius - 10;
-          ctx.moveTo(headX, ty - 7);
-          ctx.lineTo(headX - 6, ty + 4);
-          ctx.lineTo(headX + 6, ty + 4);
-          ctx.closePath();
+          ctx.arc(headX, headY, creature.radius * 1.35, 0, Math.PI * 2);
           ctx.fill();
-        }
-
-        if (creature.kind === "boss") {
-          if (creature.homeX != null) {
-            const hx = creature.homeX + ox - camera.x;
-            const hy = creature.homeY + oy - camera.y;
-            ctx.beginPath();
-            ctx.strokeStyle = hexToRgba(creature.color, 0.12);
-            ctx.lineWidth = 1;
-            ctx.setLineDash([6, 8]);
-            ctx.arc(hx, hy, creature.territoryRadius || 460, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]);
-          }
-          // Boss：用更大警示环 + 核点数量示意，无文字
-          const left = aliveNuclei(creature).length;
-          for (let i = 0; i < left; i += 1) {
-            const a = -Math.PI / 2 + (i - (left - 1) / 2) * 0.35;
-            const px = headX + Math.cos(a) * (creature.radius + 18);
-            const py = headY + Math.sin(a) * (creature.radius + 18);
-            ctx.beginPath();
-            ctx.fillStyle = hexToRgba(WARNING.stripe, 0.85);
-            ctx.arc(px, py, 3.2, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-
-        if (creature.kind === "player") {
-          const evo = EVOLUTIONS[creature.evolutionId];
-          if (evo && evo.complexity >= 2) {
-            ctx.beginPath();
-            ctx.strokeStyle = hexToRgba(creature.membrane || creature.color, 0.25);
-            ctx.lineWidth = 1;
-            ctx.arc(headX, headY, creature.radius * 1.15, 0, Math.PI * 2);
-            ctx.stroke();
-          }
         }
 
         ctx.shadowBlur = 0;

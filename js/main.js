@@ -1,5 +1,4 @@
 import { Game } from "./game.js";
-import { EVOLUTIONS as EVOS, LAYERS as LYRS } from "./config.js";
 
 const app = document.getElementById("app");
 const canvas = document.getElementById("game");
@@ -12,35 +11,9 @@ const btnStart = document.getElementById("btn-start");
 const btnRetry = document.getElementById("btn-retry");
 const btnHome = document.getElementById("btn-home");
 const btnExit = document.getElementById("btn-exit");
-const hudDepth = document.getElementById("hud-depth");
-const hudFormPips = document.getElementById("hud-form-pips");
-const hudNuclei = document.getElementById("hud-nuclei");
-const hudProteinFill = document.getElementById("hud-protein-fill");
-const hudProgressFill = document.getElementById("hud-progress-fill");
-const hudProgressIcon = document.getElementById("hud-progress-icon");
-const hudStatus = document.getElementById("hud-status");
-const proteinMeter = document.querySelector(".protein-meter");
 const boostBtn = document.getElementById("btn-boost");
 const boostRingFill = document.getElementById("boost-ring-fill");
 const BOOST_RING_LEN = 2 * Math.PI * 32;
-
-function renderPips(container, total, active) {
-  container.innerHTML = "";
-  for (let i = 0; i < total; i += 1) {
-    const dot = document.createElement("span");
-    if (i <= active) dot.classList.add("on");
-    container.appendChild(dot);
-  }
-}
-
-function renderNuclei(container, alive, max) {
-  container.innerHTML = "";
-  for (let i = 0; i < max; i += 1) {
-    const dot = document.createElement("span");
-    dot.classList.add(i < alive ? "on" : "off");
-    container.appendChild(dot);
-  }
-}
 
 const hud = {
   show() {
@@ -49,54 +22,7 @@ const hud = {
   hide() {
     hudEl.classList.add("hidden");
   },
-  setInfo({
-    layerIndex = 0,
-    evolutionId = 0,
-    points,
-    need,
-    nuclei,
-    nucleiMax,
-    proteinLeft,
-    proteinBudget,
-    recoverProgress,
-    recoverNeed,
-    recovering,
-    exhausted,
-    canEvolve,
-    boostReady,
-    boosting,
-    boostRatio = 1,
-  }) {
-    renderPips(hudDepth, LYRS.length, layerIndex);
-    renderPips(hudFormPips, EVOS.length, evolutionId);
-    renderNuclei(hudNuclei, nuclei, nucleiMax);
-
-    const proteinRatio =
-      proteinBudget > 0 ? Math.max(0, Math.min(1, proteinLeft / proteinBudget)) : 0;
-    hudProteinFill.style.width = `${proteinRatio * 100}%`;
-    proteinMeter.classList.toggle("exhausted", !!exhausted);
-
-    let progress = 0;
-    hudProgressFill.classList.remove("recover");
-    hudProgressIcon.classList.remove("portal", "recover");
-    if (recovering) {
-      progress = recoverNeed ? recoverProgress / recoverNeed : 0;
-      hudProgressFill.classList.add("recover");
-      hudProgressIcon.classList.add("recover");
-    } else if (exhausted || canEvolve) {
-      progress = 1;
-      if (exhausted) hudProgressIcon.classList.add("portal");
-    } else if (need === "MAX" || need === Infinity) {
-      progress = 1;
-    } else {
-      progress = need ? Math.min(1, points / need) : 0;
-    }
-    hudProgressFill.style.width = `${Math.max(0, Math.min(1, progress)) * 100}%`;
-
-    hudStatus.className = "status-dot";
-    if (boosting) hudStatus.classList.add("boosting");
-    else if (canEvolve || exhausted) hudStatus.classList.add("ready");
-
+  setInfo({ boostReady, boosting, boostRatio = 1 } = {}) {
     boostBtn.classList.toggle("cooling", !boostReady && !boosting);
     boostBtn.classList.toggle("boosting", !!boosting);
     if (boostRingFill) {
@@ -123,7 +49,6 @@ game.init();
 
 function isPortrait() {
   if (window.matchMedia("(orientation: portrait)").matches) return true;
-  // 部分浏览器旋转瞬间 media 未更新，用宽高兜底
   return window.innerHeight > window.innerWidth;
 }
 
@@ -185,7 +110,6 @@ function syncOrientation() {
   const portrait = isPortrait();
   document.body.classList.toggle("is-portrait", portrait);
   document.body.classList.toggle("is-landscape", !portrait);
-  // 旋转后重置摇杆视觉位置，避免错位
   const knob = document.getElementById("virtual-knob");
   if (knob) knob.style.transform = "translate(-50%, -50%)";
   game.input.dirX = 0;
@@ -248,7 +172,6 @@ function onViewportChange() {
 }
 
 window.addEventListener("orientationchange", () => {
-  // 旋转后尺寸可能延迟更新，连续校正几次
   onViewportChange();
   setTimeout(onViewportChange, 120);
   setTimeout(onViewportChange, 320);

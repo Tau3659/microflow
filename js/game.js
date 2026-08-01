@@ -7,6 +7,7 @@ import {
   updateEvolution,
   restoreOneNucleus,
   provokeCreature,
+  panicFlee,
   isAggressive,
   aliveNuclei,
   nucleusWorldPos,
@@ -112,24 +113,7 @@ export class Game {
 
   _updateHud() {
     const player = this.level.player;
-    const evo = EVOLUTIONS[player.evolutionId];
-    const need = evo.pointsToEvolve;
-    const nucleiAlive = aliveNuclei(player).length;
-    const missing = player.nuclei.length - nucleiAlive;
     this.hud.setInfo({
-      layerIndex: this.level.layerIndex,
-      evolutionId: player.evolutionId,
-      points: this.level.points,
-      need: need === Infinity ? "MAX" : need,
-      nuclei: nucleiAlive,
-      nucleiMax: player.nuclei.length,
-      proteinLeft: ecosystemProtein(this.level),
-      proteinBudget: this.level.proteinBudget,
-      recoverProgress: player.recoverProgress || 0,
-      recoverNeed: PLAYER.proteinPerNucleus,
-      recovering: missing > 0,
-      exhausted: this.level.proteinsExhausted,
-      canEvolve: this._canEvolve(),
       boostReady: (player.boostCharge ?? 0) >= 0.98 && player.boostTimer <= 0,
       boosting: player.boostTimer > 0,
       boostRatio: boostRingRatio(player),
@@ -290,14 +274,18 @@ export class Game {
       if (!enemy.alive) continue;
 
       // 只有玩家的嘴碰到敌方细胞核，才算吃掉
-      for (const n of enemy.nuclei) {
-        if (!n.alive) continue;
-        const eN = nucleusWorldPos(enemy, n);
-        if (anyMouthTouchesNucleus(player, eN, world, PLAYER.eatRangeBonus)) {
-          n.alive = false;
-          spawnBurst(level, eN.x, eN.y, enemy.coreColor, 8);
-          if (provokeCreature(enemy)) {
-            spawnBurst(level, enemy.x, enemy.y, "#ff5a3c", 12);
+      if ((enemy.nucleusIframes || 0) <= 0) {
+        for (const n of enemy.nuclei) {
+          if (!n.alive) continue;
+          const eN = nucleusWorldPos(enemy, n);
+          if (anyMouthTouchesNucleus(player, eN, world, PLAYER.eatRangeBonus)) {
+            n.alive = false;
+            spawnBurst(level, eN.x, eN.y, enemy.coreColor, 8);
+            panicFlee(enemy, player, world);
+            if (provokeCreature(enemy)) {
+              spawnBurst(level, enemy.x, enemy.y, "#ff5a3c", 12);
+            }
+            break;
           }
         }
       }

@@ -269,55 +269,35 @@ body:-webkit-full-screen {
 .hud {
   position: absolute;
   top: 0;
-  left: 0;
   right: 0;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: flex-start;
-  gap: 12px;
-  padding: calc(10px + var(--safe-top)) 16px 0;
+  padding: calc(10px + var(--safe-top)) calc(12px + var(--safe-right)) 0 0;
   pointer-events: none;
   z-index: 2;
 }
 
-.hud-left,
-.hud-right {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  min-width: 0;
-  flex: 1;
-}
-
-.hud-right {
-  align-items: flex-end;
-}
-
-.hud-center {
-  flex: 0 0 auto;
-  pointer-events: auto;
-  padding-top: 2px;
-}
-
 .exit-btn {
   margin: 0;
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 2rem;
+  height: 2rem;
   padding: 0;
-  border: 1px solid rgba(232, 244, 242, 0.28);
+  border: 1px solid rgba(232, 244, 242, 0.18);
   border-radius: 50%;
-  background: rgba(3, 16, 22, 0.45);
+  background: rgba(3, 16, 22, 0.28);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  pointer-events: auto;
+  opacity: 0.7;
 }
 
 .exit-btn:active {
   transform: scale(0.96);
-  border-color: rgba(62, 207, 176, 0.45);
+  opacity: 1;
+  border-color: rgba(62, 207, 176, 0.4);
 }
 
 .depth-pips,
@@ -507,10 +487,11 @@ body:-webkit-full-screen {
   width: 132px;
   height: 132px;
   border-radius: 50%;
-  background: var(--pad);
-  border: 1px solid var(--pad-border);
+  background: rgba(8, 28, 34, 0.28);
+  border: 1px solid rgba(232, 244, 242, 0.14);
   pointer-events: auto;
   touch-action: none;
+  opacity: 0.85;
 }
 
 .virtual-pad.active {
@@ -564,8 +545,8 @@ body:-webkit-full-screen {
   height: 86px;
   margin-bottom: 18px;
   border-radius: 50%;
-  border: 1px solid rgba(232, 194, 122, 0.35);
-  background: radial-gradient(circle at 35% 30%, rgba(232, 194, 122, 0.28), rgba(8, 28, 34, 0.5));
+  border: 1px solid rgba(232, 194, 122, 0.28);
+  background: radial-gradient(circle at 35% 30%, rgba(232, 194, 122, 0.2), rgba(8, 28, 34, 0.35));
   color: var(--text);
   font: inherit;
   pointer-events: auto;
@@ -573,6 +554,7 @@ body:-webkit-full-screen {
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0.9;
 }
 
 .boost-ring {
@@ -642,9 +624,9 @@ body:-webkit-full-screen {
 }
 
 .overlay-card {
-  width: min(100%, 18rem);
+  width: min(100%, 14rem);
   text-align: center;
-  padding: 1.5rem 1.25rem 1.35rem;
+  padding: 1.25rem 1rem 1.1rem;
   animation: rise-in 0.45s ease both;
 }
 
@@ -747,19 +729,6 @@ body.is-landscape .boost-btn {
   margin-bottom: 8px;
 }
 
-body.is-landscape .hud {
-  top: 0;
-  bottom: auto;
-  flex-direction: row;
-  align-items: flex-start;
-  padding: calc(10px + var(--safe-top)) 16px 0;
-}
-
-body.is-landscape .hud-left,
-body.is-landscape .hud-right {
-  flex-direction: column;
-}
-
 @media (min-height: 420px) {
   body.is-landscape .virtual-pad {
     width: 132px;
@@ -817,32 +786,9 @@ body.is-portrait .boost-btn {
   margin-bottom: 22px;
 }
 
-body.is-portrait .hud {
-  top: 0;
-  bottom: auto;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 8px;
-  padding:
-    calc(10px + var(--safe-top))
-    12px
-    0;
-}
-
-body.is-portrait .hud-left,
-body.is-portrait .hud-right {
-  gap: 0.38rem;
-}
-
-body.is-portrait .meter {
-  min-width: 0;
-  width: 100%;
-  max-width: 9.5rem;
-}
-
 body.is-portrait .exit-btn {
-  width: 2.4rem;
-  height: 2.4rem;
+  width: 2.15rem;
+  height: 2.15rem;
 }
 
 /* 竖屏且较窄：控件略上移，避开手势条 */

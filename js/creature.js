@@ -642,6 +642,9 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     curiousRate: temper === TEMPER.PASSIVE ? 0.34 : 0.22,
     mood: "idle",
     moodTimer: 0,
+    panicTimer: 0,
+    nucleusIframes: 0,
+    fleeAngle: 0,
     alive: true,
     storedProtein: 0,
     bodyProtein: bodyProteinFor(radius, "normal"),
@@ -696,6 +699,9 @@ export function createBoss(x, y, layer) {
     warning: true,
     aggro: 1,
     provokeFlash: 0,
+    panicTimer: 0,
+    nucleusIframes: 0,
+    fleeAngle: 0,
     alive: true,
     storedProtein: 0,
     bodyProtein: bodyProteinFor(b.radius, "boss"),
@@ -883,22 +889,29 @@ function playerCruiseSpeed(player) {
   return PLAYER.baseSpeed * speedScaleForRadius(player?.radius || PLAYER.speedRefRadius);
 }
 
-function steerCreature(creature, tx, ty, dt, speedMul = 1, player = null) {
+function steerCreature(creature, tx, ty, dt, speedMul = 1, player = null, opts = {}) {
   const dir = normalize(tx, ty);
   const targetAngle = Math.atan2(dir.y, dir.x);
   let delta = targetAngle - creature.angle;
   while (delta > Math.PI) delta -= Math.PI * 2;
   while (delta < -Math.PI) delta += Math.PI * 2;
-  creature.angle += delta * clamp((creature.kind === "boss" ? 3.2 : 2.6) * dt, 0, 1);
+  // 转身偏慢，避免瞬转贴脸纠缠
+  const turn =
+    opts.turnRate ??
+    (creature.panicTimer > 0 ? 1.7 : creature.kind === "boss" ? 1.25 : 0.95);
+  creature.angle += delta * clamp(turn * dt, 0, 1);
 
   // 大体型更慢，且整体略低于玩家常速，保证可追可逃
   const base = creature.kind === "boss" ? 86 : 98;
   let speed = base * speedScaleForRadius(creature.radius) * speedMul;
-  if (player) {
+  if (player && !opts.breakCap) {
     const cap =
       playerCruiseSpeed(player) *
       (creature.kind === "boss" ? PLAYER.bossSpeedFactor || 0.9 : PLAYER.npcSpeedFactor || 0.86);
     speed = Math.min(speed, cap);
+  } else if (player && opts.breakCap) {
+    // 受击逃跑时可短暂略快于玩家，拉开距离
+    speed = Math.min(speed, playerCruiseSpeed(player) * 1.18);
   }
   creature.vx = Math.cos(creature.angle) * speed;
   creature.vy = Math.sin(creature.angle) * speed;
@@ -906,6 +919,23 @@ function steerCreature(creature, tx, ty, dt, speedMul = 1, player = null) {
   creature.y += creature.vy * dt;
   creature.pulse += dt * 2;
   syncSegments(creature);
+}
+
+/** 细胞核被咬后：短时加速逃离，避免与玩家持续纠缠 */
+export function panicFlee(creature, player, world) {
+  if (!creature || creature.kind === "boss") {
+    // Boss 也短暂后撤，但不进入长时间恐慌
+    creature.panicTimer = Math.max(creature.panicTimer || 0, 0.65);
+  } else {
+    creature.panicTimer = 1.15 + Math.random() * 0.45;
+  }
+  creature.nucleusIframes = Math.max(creature.nucleusIframes || 0, 0.75);
+  creature.mood = "panic";
+  const off = wrappedOffset(creature.x, creature.y, player.x, player.y, world);
+  if (off.dist > 0.001) {
+    creature.fleeAngle = Math.atan2(-off.dy, -off.dx);
+    creature.wanderAngle = creature.fleeAngle;
+  }
 }
 
 function updateBoss(creature, player, dt, world, proteins = []) {
@@ -1003,13 +1033,51 @@ function seekProtein(creature, proteins, world, maxDist = 260) {
 }
 
 export function updateEnemy(creature, player, dt, world, proteins = []) {
+  if (creature.nucleusIframes > 0) creature.nucleusIframes -= dt;
+  if (creature.panicTimer > 0) creature.panicTimer -= dt;
+
   if (creature.kind === "boss") {
+    // Boss 受击恐慌时优先拉开，再回到领地 AI
+    if ((creature.panicTimer || 0) > 0) {
+      const toPlayer = wrappedOffset(creature.x, creature.y, player.x, player.y, world);
+      const ang = creature.fleeAngle ?? Math.atan2(-toPlayer.dy, -toPlayer.dx);
+      steerCreature(
+        creature,
+        Math.cos(ang),
+        Math.sin(ang),
+        dt,
+        1.45,
+        player,
+        { breakCap: true, turnRate: 1.6 }
+      );
+      wrapEntity(creature, world);
+      return;
+    }
     updateBoss(creature, player, dt, world, proteins);
     return;
   }
 
   if (creature.provokeFlash > 0) creature.provokeFlash -= dt;
   if (creature.moodTimer > 0) creature.moodTimer -= dt;
+
+  const toPlayer = wrappedOffset(creature.x, creature.y, player.x, player.y, world);
+
+  // 细胞核被吃后的短时加速逃跑
+  if ((creature.panicTimer || 0) > 0) {
+    const ang = creature.fleeAngle ?? Math.atan2(-toPlayer.dy, -toPlayer.dx);
+    steerCreature(
+      creature,
+      Math.cos(ang),
+      Math.sin(ang),
+      dt,
+      1.7,
+      player,
+      { breakCap: true, turnRate: 1.55 }
+    );
+    wrapEntity(creature, world);
+    if (creature.panicTimer <= 0) creature.mood = "idle";
+    return;
+  }
 
   creature.wanderTimer -= dt;
   if (creature.wanderTimer <= 0) {
@@ -1028,7 +1096,6 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
   let ty = Math.sin(creature.wanderAngle);
   let speedMul = 1;
 
-  const toPlayer = wrappedOffset(creature.x, creature.y, player.x, player.y, world);
   const aggressive = isAggressive(creature);
 
   if (aggressive) {
