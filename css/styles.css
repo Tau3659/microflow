@@ -112,28 +112,35 @@ body:-webkit-full-screen {
   position: relative;
   z-index: 1;
   text-align: center;
-  max-width: 22rem;
+  width: min(22rem, 100%);
+  max-width: 100%;
+  padding: 0 0.5rem;
+  box-sizing: border-box;
   animation: rise-in 0.9s ease-out both;
 }
 
 .brand {
-  margin: 0;
-  font-size: clamp(2.6rem, 11vw, 4.2rem);
+  margin: 0 auto;
+  max-width: 100%;
+  font-size: clamp(1.7rem, 8.5vw, 4.2rem);
   font-weight: 700;
-  letter-spacing: 0.28em;
-  line-height: 1;
+  letter-spacing: 0.18em;
+  line-height: 1.05;
   color: var(--text);
-  text-indent: 0.28em;
+  text-indent: 0.18em;
   text-shadow: 0 0 40px rgba(62, 207, 176, 0.35);
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .brand-cn {
   margin: 0.55rem 0 0;
-  font-size: clamp(1.15rem, 4.5vw, 1.45rem);
+  font-size: clamp(1.05rem, 4.2vw, 1.45rem);
   font-weight: 400;
-  letter-spacing: 0.55em;
-  text-indent: 0.55em;
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
   color: var(--accent);
+  white-space: nowrap;
 }
 
 .cta {
@@ -705,11 +712,13 @@ body:-webkit-full-screen {
 
 /* —— 横屏布局 —— */
 body.is-landscape .title-content {
-  max-width: 34rem;
+  width: min(34rem, 100%);
 }
 
 body.is-landscape .brand {
-  font-size: clamp(2.2rem, 8vw, 3.6rem);
+  font-size: clamp(2rem, 7vw, 3.6rem);
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
 }
 
 body.is-landscape .controls {
@@ -759,13 +768,31 @@ body.is-landscape .boost-btn {
   }
 }
 
-/* —— 竖屏布局：摇杆左下、加速右下；HUD 顶部分栏收紧 —— */
+/* —— 竖屏布局：摇杆左下、加速右下；标题需完整落在屏内 —— */
 body.is-portrait .title-content {
-  max-width: 20rem;
+  width: min(20rem, 100%);
+  padding: 0 1rem;
 }
 
 body.is-portrait .brand {
-  font-size: clamp(2.4rem, 12vw, 3.4rem);
+  /* 字距较大时字号需按屏宽收缩，避免 MICROFLOW 被裁切 */
+  font-size: clamp(1.45rem, 7vw, 2.4rem);
+  letter-spacing: 0.1em;
+  text-indent: 0.1em;
+}
+
+body.is-portrait .brand-cn {
+  font-size: clamp(1rem, 4vw, 1.3rem);
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+}
+
+@media (max-width: 360px) {
+  body.is-portrait .brand {
+    font-size: clamp(1.25rem, 6.2vw, 1.9rem);
+    letter-spacing: 0.08em;
+    text-indent: 0.08em;
+  }
 }
 
 body.is-portrait .controls {
