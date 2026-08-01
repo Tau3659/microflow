@@ -34,7 +34,9 @@ export function rollAbilityDrop(layerIndex, player, isBoss = false) {
 
   let total = 0;
   const weights = candidates.map((a) => {
-    const w = a.dropRate * (isBoss ? 1.4 : 1);
+    // 胞口加权，提高抽中概率
+    const buccalBoost = a.id === "buccal" ? 2.2 : 1;
+    const w = a.dropRate * (isBoss ? 1.4 : 1) * buccalBoost;
     total += w;
     return w;
   });

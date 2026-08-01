@@ -172,8 +172,8 @@ export function createLevel(layerIndex, playerState) {
     deepField,
     particles: [],
     abilities: [],
+    // 第一层仅「下一层」；其后每层同时有「上一层」与「下一层」（无限流无最后一层）
     portal: createPortal("down"),
-    /** 上一层出口：仅深层存在，始终可用；进入后整层 NPC/蛋白重置 */
     exitPortal: layerIndex > 0 ? createPortal("up") : null,
     world: { ...WORLD },
     points: playerState.points,

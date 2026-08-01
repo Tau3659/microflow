@@ -4,6 +4,7 @@ import {
   MORPH,
   PLAYER,
   PLAYER_LOOK,
+  PROVOKE,
   SCALE,
   SPECIES,
   TEMPER,
@@ -562,16 +563,57 @@ export function isAggressive(creature) {
   return !!creature.aggressive;
 }
 
-/** 被玩家攻击后，可激怒型转为攻击性并切换警告色 */
+/** 等级低于玩家的普通 NPC 不会主动进攻（Boss 不受限） */
+export function willAggressPlayer(creature, player) {
+  if (!isAggressive(creature)) return false;
+  if (creature.kind === "boss") return true;
+  const npcLvl = creature.evolutionId ?? 0;
+  const playerLvl = player?.evolutionId ?? 0;
+  if (npcLvl < playerLvl) return false;
+  return true;
+}
+
+/** 消退被激怒后的临时攻击性，恢复冷静配色 */
+export function calmProvokedCreature(creature) {
+  if (!creature || creature.kind === "boss") return;
+  if (!creature.provoked) return;
+  creature.aggressive = false;
+  creature.warning = false;
+  creature.provoked = false;
+  creature.aggressionTimer = 0;
+  if (creature.calmColor) {
+    creature.color = creature.calmColor;
+    creature.membrane = creature.calmMembrane;
+    creature.coreColor = creature.calmCore;
+  }
+}
+
+/** 被玩家攻击后，可激怒型转为攻击性并切换警告色（一段时间后消退） */
 export function provokeCreature(creature) {
   if (!creature || creature.kind === "boss") return false;
   if (creature.temper === TEMPER.PASSIVE) return false;
-  if (creature.aggressive) return false;
   if (creature.temper !== TEMPER.SKITTISH && creature.temper !== TEMPER.HOSTILE) {
+    return false;
+  }
+  // 已在攻击中：刷新计时
+  if (creature.aggressive && creature.provoked) {
+    creature.aggressionTimer =
+      PROVOKE.durationMin +
+      Math.random() * (PROVOKE.durationMax - PROVOKE.durationMin);
+    creature.provokeFlash = 0.55;
+    return true;
+  }
+  if (creature.aggressive && !creature.provoked) {
+    // 固有敌对：被打后也进入有时限的激怒强化，超时回固有敌对色但保持攻击
+    // 仅「被攻击后变得有攻击性」需要消退；固有 HOSTILE 保持攻击
     return false;
   }
   creature.aggressive = true;
   creature.warning = true;
+  creature.provoked = true;
+  creature.aggressionTimer =
+    PROVOKE.durationMin +
+    Math.random() * (PROVOKE.durationMax - PROVOKE.durationMin);
   creature.calmColor = creature.color;
   creature.calmMembrane = creature.membrane;
   creature.calmCore = creature.coreColor;
@@ -657,6 +699,8 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     wanderTimer: 0,
     aggro: temper === TEMPER.HOSTILE ? 0.85 + Math.random() * 0.25 : 0.4 + Math.random() * 0.3,
     provokeFlash: 0,
+    provoked: false,
+    aggressionTimer: 0,
     curiousRate: temper === TEMPER.PASSIVE ? 0.34 : 0.22,
     mood: "idle",
     moodTimer: 0,
@@ -1169,6 +1213,10 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
 
   if (creature.provokeFlash > 0) creature.provokeFlash -= dt;
   if (creature.moodTimer > 0) creature.moodTimer -= dt;
+  if (creature.provoked && (creature.aggressionTimer || 0) > 0) {
+    creature.aggressionTimer -= dt;
+    if (creature.aggressionTimer <= 0) calmProvokedCreature(creature);
+  }
 
   const toPlayer = wrappedOffset(creature.x, creature.y, player.x, player.y, world);
 
@@ -1206,7 +1254,8 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
   let ty = Math.sin(creature.wanderAngle);
   let speedMul = 1;
 
-  const aggressive = isAggressive(creature);
+  // 低等级不主动进攻：改为觅食/游荡
+  const aggressive = willAggressPlayer(creature, player);
 
   if (aggressive) {
     const chaseRange = 320;
@@ -1221,6 +1270,14 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
         tx = food.dx * 1.1 + tx * 0.25;
         ty = food.dy * 1.1 + ty * 0.25;
       }
+    }
+  } else if (isAggressive(creature) && !willAggressPlayer(creature, player)) {
+    // 有攻击性但等级更低：不追人，只觅食
+    const food = seekProtein(creature, proteins, world);
+    if (food) {
+      tx = food.dx * 1.1 + tx * 0.25;
+      ty = food.dy * 1.1 + ty * 0.25;
+      speedMul = 0.9;
     }
   } else if (creature.mood === "curious" && (creature.moodTimer || 0) > 0 && toPlayer.dist < 420) {
     // 好奇靠近玩家（仍非攻击）

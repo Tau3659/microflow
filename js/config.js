@@ -153,9 +153,9 @@ export const ABILITIES = {
     id: "buccal",
     name: "胞口",
     maxStacks: 4,
-    dropRate: 0.075,
+    dropRate: 0.2,
     color: "#e8c27a",
-    minLayer: 1,
+    minLayer: 0,
   },
   capsule: {
     id: "capsule",
@@ -514,7 +514,8 @@ export const PLAYER_LOOK = {
 
 export const PLAYER = {
   baseSpeed: 120,
-  boostSpeed: 210,
+  /** 加速瞬间速度（相对旧值 +50%，同持时距离亦约 +50%） */
+  boostSpeed: 315,
   /** 相对玩家常速，其他生物速度上限（略慢以便追逐/逃脱） */
   npcSpeedFactor: 0.86,
   bossSpeedFactor: 0.9,
@@ -547,4 +548,10 @@ export const BOSS_AI = {
   aggroRadius: 300,
   leashRadius: 520,
   returnSpeed: 1.15,
+};
+
+/** 被攻击后临时攻击性持续时间（秒） */
+export const PROVOKE = {
+  durationMin: 5.5,
+  durationMax: 8.5,
 };

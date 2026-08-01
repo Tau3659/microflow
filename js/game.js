@@ -9,6 +9,7 @@ import {
   provokeCreature,
   panicFlee,
   isAggressive,
+  willAggressPlayer,
   aliveNuclei,
   nucleusWorldPos,
   anyMouthTouchesNucleus,
@@ -146,8 +147,8 @@ export class Game {
   }
 
   _portalOpen() {
-    // 无限流：进化后或本层蛋白质吃光即可进入下一层
-    return this.level.evolvedThisLayer || this.level.proteinsExhausted;
+    // 无限流无封顶层：除首层外上下入口常开；首层仅下一层入口常开
+    return true;
   }
 
   _updateHud() {
@@ -354,7 +355,7 @@ export class Game {
         if (d < nearestBoss) nearestBoss = d;
         continue;
       }
-      if (!isAggressive(c)) continue;
+      if (!willAggressPlayer(c, player)) continue;
       if (d < nearestHostile) nearestHostile = d;
     }
     const hostileRange = 380;
@@ -469,8 +470,12 @@ export class Game {
         continue;
       }
 
-      // 仅攻击性生物会用嘴吞噬玩家细胞核；逃跑中不可攻击
-      if (player.invuln > 0 || !isAggressive(enemy) || (enemy.panicTimer || 0) > 0) {
+      // 仅会主动进攻的生物可咬核；逃跑中/低等级不可攻击
+      if (
+        player.invuln > 0 ||
+        !willAggressPlayer(enemy, player) ||
+        (enemy.panicTimer || 0) > 0
+      ) {
         continue;
       }
       let hit = false;
