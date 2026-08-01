@@ -473,15 +473,17 @@ body:-webkit-full-screen {
   50% { transform: scale(1.35); opacity: 0.7; }
 }
 
-/* 虚拟按键 */
+/* 虚拟按键：默认横屏底栏 */
 .controls {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
+  top: auto;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
+  flex-direction: row;
   padding:
     0
     calc(18px + var(--safe-right))
@@ -489,6 +491,15 @@ body:-webkit-full-screen {
     calc(18px + var(--safe-left));
   pointer-events: none;
   z-index: 4;
+  transition: inset 0.28s ease, padding 0.28s ease;
+}
+
+.hud,
+.virtual-pad,
+.boost-btn,
+.meter,
+.exit-btn {
+  transition: transform 0.28s ease, width 0.28s ease, height 0.28s ease, margin 0.28s ease;
 }
 
 .virtual-pad {
@@ -662,114 +673,152 @@ body:-webkit-full-screen {
   to { opacity: 1; }
 }
 
-/* 横屏优先布局 */
-@media (orientation: landscape) {
-  .landscape-title {
-    max-width: 34rem;
-  }
-
-  .brand {
-    font-size: clamp(2.2rem, 8vw, 3.6rem);
-  }
-
-  .virtual-pad {
-    width: 118px;
-    height: 118px;
-  }
-
-  .boost-btn {
-    width: 78px;
-    height: 78px;
-    margin-bottom: 8px;
-  }
-
-  .controls {
-    padding-bottom: calc(10px + var(--safe-bottom));
-  }
+/* —— 横屏布局 —— */
+body.is-landscape .title-content {
+  max-width: 34rem;
 }
 
-@media (orientation: landscape) and (min-height: 420px) {
-  .virtual-pad {
+body.is-landscape .brand {
+  font-size: clamp(2.2rem, 8vw, 3.6rem);
+}
+
+body.is-landscape .controls {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  flex-direction: row;
+  align-items: flex-end;
+  padding:
+    0
+    calc(18px + var(--safe-right))
+    calc(12px + var(--safe-bottom))
+    calc(18px + var(--safe-left));
+}
+
+body.is-landscape .virtual-pad {
+  width: 118px;
+  height: 118px;
+}
+
+body.is-landscape .boost-btn {
+  width: 78px;
+  height: 78px;
+  margin-bottom: 8px;
+}
+
+body.is-landscape .hud {
+  top: 0;
+  bottom: auto;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: calc(10px + var(--safe-top)) 16px 0;
+}
+
+body.is-landscape .hud-left,
+body.is-landscape .hud-right {
+  flex-direction: column;
+}
+
+@media (min-height: 420px) {
+  body.is-landscape .virtual-pad {
     width: 132px;
     height: 132px;
   }
-  .boost-btn {
+  body.is-landscape .boost-btn {
     width: 86px;
     height: 86px;
   }
 }
 
-/* 竖屏：提示旋转 */
-.rotate-hint {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background:
-    radial-gradient(ellipse 80% 50% at 50% 30%, rgba(62, 207, 176, 0.16), transparent 55%),
-    linear-gradient(180deg, var(--bg-shallow), var(--bg-abyss));
-}
-
-.rotate-hint[hidden] {
-  display: none !important;
-}
-
-.rotate-card {
-  text-align: center;
-  max-width: 18rem;
-  animation: rise-in 0.5s ease both;
-}
-
-.rotate-brand-mark {
-  font-size: clamp(1.4rem, 6vw, 2rem);
-  margin-bottom: 1.4rem;
-}
-
-.rotate-icon {
-  width: 64px;
-  height: 40px;
-  margin: 0 auto;
-  border: 2px solid rgba(62, 207, 176, 0.55);
-  border-radius: 8px;
-  position: relative;
-  animation: phone-tilt 1.6s ease-in-out infinite;
-}
-
-.rotate-icon::after {
-  content: "";
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  width: 3px;
-  height: 10px;
-  margin-top: -5px;
-  border-radius: 2px;
-  background: rgba(62, 207, 176, 0.7);
-}
-
-@keyframes phone-tilt {
-  0%,
-  100% {
-    transform: rotate(0deg);
-  }
-  40% {
-    transform: rotate(90deg);
-  }
-  60% {
-    transform: rotate(90deg);
-  }
-}
-
-@media (min-width: 768px) and (orientation: landscape) {
-  .virtual-pad {
+@media (min-width: 768px) {
+  body.is-landscape .virtual-pad {
     width: 140px;
     height: 140px;
   }
-  .boost-btn {
+  body.is-landscape .boost-btn {
     width: 92px;
     height: 92px;
+  }
+}
+
+/* —— 竖屏布局：摇杆左下、加速右下；HUD 顶部分栏收紧 —— */
+body.is-portrait .title-content {
+  max-width: 20rem;
+}
+
+body.is-portrait .brand {
+  font-size: clamp(2.4rem, 12vw, 3.4rem);
+}
+
+body.is-portrait .controls {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding:
+    0
+    calc(16px + var(--safe-right))
+    calc(20px + var(--safe-bottom))
+    calc(16px + var(--safe-left));
+}
+
+body.is-portrait .virtual-pad {
+  width: 128px;
+  height: 128px;
+}
+
+body.is-portrait .boost-btn {
+  width: 84px;
+  height: 84px;
+  margin-bottom: 22px;
+}
+
+body.is-portrait .hud {
+  top: 0;
+  bottom: auto;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  padding:
+    calc(10px + var(--safe-top))
+    12px
+    0;
+}
+
+body.is-portrait .hud-left,
+body.is-portrait .hud-right {
+  gap: 0.38rem;
+}
+
+body.is-portrait .meter {
+  min-width: 0;
+  width: 100%;
+  max-width: 9.5rem;
+}
+
+body.is-portrait .exit-btn {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+/* 竖屏且较窄：控件略上移，避开手势条 */
+@media (max-width: 480px) {
+  body.is-portrait .controls {
+    padding-bottom: calc(28px + var(--safe-bottom));
+  }
+
+  body.is-portrait .virtual-pad {
+    width: 118px;
+    height: 118px;
+  }
+
+  body.is-portrait .boost-btn {
+    width: 76px;
+    height: 76px;
+    margin-bottom: 28px;
   }
 }

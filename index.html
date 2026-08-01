@@ -8,25 +8,17 @@
   />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="screen-orientation" content="landscape" />
   <meta name="theme-color" content="#041820" />
   <title>菌流 · MICROFLOW</title>
   <link rel="stylesheet" href="css/styles.css" />
 </head>
-<body>
-  <div id="rotate-hint" class="rotate-hint" hidden>
-    <div class="rotate-card">
-      <p class="brand rotate-brand-mark">MICROFLOW</p>
-      <div class="rotate-icon" aria-hidden="true"></div>
-    </div>
-  </div>
-
+<body class="is-landscape">
   <div id="app">
     <canvas id="game" aria-label="MICROFLOW"></canvas>
 
     <section id="title-screen" class="screen">
       <div class="title-atmosphere" aria-hidden="true"></div>
-      <div class="title-content landscape-title">
+      <div class="title-content">
         <p class="brand">MICROFLOW</p>
         <h1 class="brand-cn">菌流</h1>
         <button id="btn-start" class="cta icon-cta" type="button" aria-label="开始">

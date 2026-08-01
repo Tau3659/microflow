@@ -21,7 +21,6 @@ const hudProgressIcon = document.getElementById("hud-progress-icon");
 const hudStatus = document.getElementById("hud-status");
 const proteinMeter = document.querySelector(".protein-meter");
 const boostBtn = document.getElementById("btn-boost");
-const rotateHint = document.getElementById("rotate-hint");
 
 function renderPips(container, total, active) {
   container.innerHTML = "";
@@ -114,7 +113,9 @@ const game = new Game({ canvas, controlsRoot, hud, overlay });
 game.init();
 
 function isPortrait() {
-  return window.matchMedia("(orientation: portrait)").matches;
+  if (window.matchMedia("(orientation: portrait)").matches) return true;
+  // 部分浏览器旋转瞬间 media 未更新，用宽高兜底
+  return window.innerHeight > window.innerWidth;
 }
 
 function isFullscreen() {
@@ -145,7 +146,7 @@ async function requestFs(el) {
 }
 
 async function enterFullscreen() {
-  if (isPortrait() || isFullscreen()) return;
+  if (isFullscreen()) return;
   try {
     await requestFs(app);
   } catch {
@@ -170,19 +171,19 @@ async function exitFullscreen() {
   setTimeout(() => game.renderer.resize(), 80);
 }
 
+/** 旋转时切换横/竖屏 UI 布局类 */
 function syncOrientation() {
   const portrait = isPortrait();
-  rotateHint.hidden = !portrait;
-  document.body.classList.toggle("portrait-lock", portrait);
-}
-
-async function preferLandscape() {
-  try {
-    const orient = screen.orientation || screen.mozOrientation || screen.msOrientation;
-    if (orient?.lock) await orient.lock("landscape");
-  } catch {
-    // ignore
-  }
+  document.body.classList.toggle("is-portrait", portrait);
+  document.body.classList.toggle("is-landscape", !portrait);
+  // 旋转后重置摇杆视觉位置，避免错位
+  const knob = document.getElementById("virtual-knob");
+  if (knob) knob.style.transform = "translate(-50%, -50%)";
+  game.input.dirX = 0;
+  game.input.dirY = 0;
+  game.input.boostPressed = false;
+  boostBtn.classList.remove("active");
+  document.getElementById("virtual-pad")?.classList.remove("active");
 }
 
 function returnToTitle() {
@@ -201,24 +202,18 @@ game.onStateChange = (state) => {
 };
 
 btnStart.addEventListener("click", async () => {
-  await preferLandscape();
-  if (isPortrait()) {
-    syncOrientation();
-    return;
-  }
   await enterFullscreen();
   titleScreen.classList.add("hidden");
+  syncOrientation();
+  game.renderer.resize();
   game.start(0, true);
 });
 
 btnRetry.addEventListener("click", async () => {
-  await preferLandscape();
-  if (isPortrait()) {
-    syncOrientation();
-    return;
-  }
   await enterFullscreen();
   overlay.hide();
+  syncOrientation();
+  game.renderer.resize();
   game.start(0, true);
 });
 
@@ -232,28 +227,40 @@ btnExit.addEventListener("click", (e) => {
 document.addEventListener(
   "touchmove",
   (e) => {
-    if (!titleScreen.classList.contains("hidden") && rotateHint.hidden) return;
+    if (!titleScreen.classList.contains("hidden")) return;
     e.preventDefault();
   },
   { passive: false }
 );
 
+function onViewportChange() {
+  syncOrientation();
+  game.renderer.resize();
+}
+
 window.addEventListener("orientationchange", () => {
-  setTimeout(async () => {
-    syncOrientation();
-    if (!isPortrait() && titleScreen.classList.contains("hidden")) {
-      await enterFullscreen();
-    }
-    game.renderer.resize();
-  }, 160);
+  // 旋转后尺寸可能延迟更新，连续校正几次
+  onViewportChange();
+  setTimeout(onViewportChange, 120);
+  setTimeout(onViewportChange, 320);
 });
 
-window.addEventListener("resize", () => {
+window.addEventListener("resize", onViewportChange);
+
+if (screen.orientation?.addEventListener) {
+  screen.orientation.addEventListener("change", () => {
+    onViewportChange();
+    setTimeout(onViewportChange, 120);
+  });
+}
+
+document.addEventListener("fullscreenchange", () => {
   syncOrientation();
   game.renderer.resize();
 });
-
-document.addEventListener("fullscreenchange", () => game.renderer.resize());
-document.addEventListener("webkitfullscreenchange", () => game.renderer.resize());
+document.addEventListener("webkitfullscreenchange", () => {
+  syncOrientation();
+  game.renderer.resize();
+});
 
 syncOrientation();
