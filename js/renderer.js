@@ -590,21 +590,17 @@ export class Renderer {
             ctx.stroke();
             ctx.setLineDash([]);
           }
-          ctx.fillStyle = hexToRgba("#e8f4f2", 0.7);
-          ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText(creature.name, headX, headY - creature.radius - 22);
-          const state =
-            creature.aiState === "chase"
-              ? "警戒"
-              : creature.aiState === "return"
-                ? "归巢"
-                : "巡逻";
-          ctx.fillText(
-            `核 ${aliveNuclei(creature).length} · ${state}`,
-            headX,
-            headY - creature.radius - 9
-          );
+          // Boss：用更大警示环 + 核点数量示意，无文字
+          const left = aliveNuclei(creature).length;
+          for (let i = 0; i < left; i += 1) {
+            const a = -Math.PI / 2 + (i - (left - 1) / 2) * 0.35;
+            const px = headX + Math.cos(a) * (creature.radius + 18);
+            const py = headY + Math.sin(a) * (creature.radius + 18);
+            ctx.beginPath();
+            ctx.fillStyle = hexToRgba(WARNING.stripe, 0.85);
+            ctx.arc(px, py, 3.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
 
         if (creature.kind === "player") {
@@ -651,14 +647,16 @@ export class Renderer {
         ctx.fill();
       }
       ctx.restore();
-      ctx.fillStyle = open ? "rgba(232,244,242,0.8)" : "rgba(232,244,242,0.35)";
-      ctx.font = "12px -apple-system, BlinkMacSystemFont, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(
-        open ? "进入下一层生物圈" : "进化或吃光蛋白后开启",
-        x,
-        y + r + 18
-      );
+      // 开启时用向上箭头符号形提示，无文字
+      if (open) {
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba("#3ecfb0", 0.85);
+        ctx.moveTo(x, y - r - 10);
+        ctx.lineTo(x - 8, y - r + 4);
+        ctx.lineTo(x + 8, y - r + 4);
+        ctx.closePath();
+        ctx.fill();
+      }
     });
   }
 
@@ -675,24 +673,10 @@ export class Renderer {
     }
   }
 
-  drawFloats(floats, camera, world) {
-    const ctx = this.ctx;
-    ctx.textAlign = "center";
-    ctx.font = "13px -apple-system, BlinkMacSystemFont, sans-serif";
-    for (const f of floats) {
-      const a = Math.max(0, f.life / f.maxLife);
-      forEachWrapDraw(f.x, f.y, camera, world, this.w, this.h, 30, (x, y) => {
-        ctx.fillStyle = hexToRgba(f.color, a);
-        ctx.fillText(f.text, x, y - (1 - a) * 28);
-      });
-    }
-  }
-
   render(level, camera, canEvolve, portalOpen) {
     this.time += 0.016;
     const p = level.player;
     const world = level.world;
-    // 移动越快，深层与幽灵层相对滑动越明显
     this.motion.x += p.vx * 0.012;
     this.motion.y += p.vy * 0.012;
     this.motion.x *= 0.985;
@@ -715,6 +699,5 @@ export class Renderer {
     for (const c of level.creatures) this.drawCreature(c, camera, world);
     this.drawCreature(level.player, camera, world);
     this.drawParticles(level.particles, camera, world);
-    this.drawFloats(level.floats, camera, world);
   }
 }

@@ -1,4 +1,5 @@
 import { Game } from "./game.js";
+import { EVOLUTIONS as EVOS, LAYERS as LYRS } from "./config.js";
 
 const app = document.getElementById("app");
 const canvas = document.getElementById("game");
@@ -6,20 +7,39 @@ const titleScreen = document.getElementById("title-screen");
 const hudEl = document.getElementById("hud");
 const controlsRoot = document.getElementById("controls");
 const overlayEl = document.getElementById("overlay");
-const overlayTitle = document.getElementById("overlay-title");
-const overlayText = document.getElementById("overlay-text");
+const overlayVisual = document.getElementById("overlay-visual");
 const btnStart = document.getElementById("btn-start");
 const btnRetry = document.getElementById("btn-retry");
 const btnHome = document.getElementById("btn-home");
 const btnExit = document.getElementById("btn-exit");
-const hudLayer = document.getElementById("hud-layer");
-const hudForm = document.getElementById("hud-form");
-const hudPoints = document.getElementById("hud-points");
+const hudDepth = document.getElementById("hud-depth");
+const hudFormPips = document.getElementById("hud-form-pips");
 const hudNuclei = document.getElementById("hud-nuclei");
-const hudProteinLeft = document.getElementById("hud-protein-left");
-const hudEvolve = document.getElementById("hud-evolve");
+const hudProteinFill = document.getElementById("hud-protein-fill");
+const hudProgressFill = document.getElementById("hud-progress-fill");
+const hudProgressIcon = document.getElementById("hud-progress-icon");
+const hudStatus = document.getElementById("hud-status");
+const proteinMeter = document.querySelector(".protein-meter");
 const boostBtn = document.getElementById("btn-boost");
 const rotateHint = document.getElementById("rotate-hint");
+
+function renderPips(container, total, active) {
+  container.innerHTML = "";
+  for (let i = 0; i < total; i += 1) {
+    const dot = document.createElement("span");
+    if (i <= active) dot.classList.add("on");
+    container.appendChild(dot);
+  }
+}
+
+function renderNuclei(container, alive, max) {
+  container.innerHTML = "";
+  for (let i = 0; i < max; i += 1) {
+    const dot = document.createElement("span");
+    dot.classList.add(i < alive ? "on" : "off");
+    container.appendChild(dot);
+  }
+}
 
 const hud = {
   show() {
@@ -29,8 +49,8 @@ const hud = {
     hudEl.classList.add("hidden");
   },
   setInfo({
-    layer,
-    form,
+    layerIndex = 0,
+    evolutionId = 0,
     points,
     need,
     nuclei,
@@ -45,41 +65,44 @@ const hud = {
     boostReady,
     boosting,
   }) {
-    hudLayer.textContent = layer;
-    hudForm.textContent = form;
-    hudNuclei.textContent = `细胞核 ${nuclei} / ${nucleiMax}`;
-    hudProteinLeft.textContent = exhausted
-      ? "本层蛋白已尽"
-      : `本层蛋白 ${proteinLeft} / ${proteinBudget}`;
-    hudProteinLeft.classList.toggle("exhausted", !!exhausted);
+    renderPips(hudDepth, LYRS.length, layerIndex);
+    renderPips(hudFormPips, EVOS.length, evolutionId);
+    renderNuclei(hudNuclei, nuclei, nucleiMax);
+
+    const proteinRatio =
+      proteinBudget > 0 ? Math.max(0, Math.min(1, proteinLeft / proteinBudget)) : 0;
+    hudProteinFill.style.width = `${proteinRatio * 100}%`;
+    proteinMeter.classList.toggle("exhausted", !!exhausted);
+
+    let progress = 0;
+    hudProgressFill.classList.remove("recover");
+    hudProgressIcon.classList.remove("portal", "recover");
     if (recovering) {
-      hudPoints.textContent = `修复核 ${recoverProgress}/${recoverNeed}`;
+      progress = recoverNeed ? recoverProgress / recoverNeed : 0;
+      hudProgressFill.classList.add("recover");
+      hudProgressIcon.classList.add("recover");
+    } else if (exhausted || canEvolve) {
+      progress = 1;
+      if (exhausted) hudProgressIcon.classList.add("portal");
+    } else if (need === "MAX" || need === Infinity) {
+      progress = 1;
     } else {
-      hudPoints.textContent = `进化点 ${points}${need === "MAX" ? "" : ` / ${need}`}`;
+      progress = need ? Math.min(1, points / need) : 0;
     }
-    hudEvolve.classList.toggle("ready", !!canEvolve || !!exhausted);
-    hudEvolve.classList.toggle("boosting", !!boosting);
-    if (boosting) {
-      hudEvolve.textContent = "加速中";
-    } else if (exhausted) {
-      hudEvolve.textContent = "进入下一层";
-    } else if (recovering) {
-      hudEvolve.textContent = "吞噬蛋白质修复";
-    } else if (canEvolve) {
-      hudEvolve.textContent = "寻找 DNA 进化";
-    } else if (need === "MAX") {
-      hudEvolve.textContent = "终极形态";
-    } else {
-      hudEvolve.textContent = "收集蛋白质";
-    }
+    hudProgressFill.style.width = `${Math.max(0, Math.min(1, progress)) * 100}%`;
+
+    hudStatus.className = "status-dot";
+    if (boosting) hudStatus.classList.add("boosting");
+    else if (canEvolve || exhausted) hudStatus.classList.add("ready");
+
     boostBtn.classList.toggle("cooling", !boostReady && !boosting);
   },
 };
 
 const overlay = {
-  show(title, text) {
-    overlayTitle.textContent = title;
-    overlayText.textContent = text;
+  show(kind = "end") {
+    overlayVisual.classList.toggle("win", kind === "win");
+    overlayVisual.classList.toggle("end", kind !== "win");
     overlayEl.classList.remove("hidden");
   },
   hide() {
@@ -129,7 +152,7 @@ async function enterFullscreen() {
     try {
       await requestFs(document.documentElement);
     } catch {
-      // 部分浏览器拒绝全屏 API；布局已用 100dvh 铺满可视区域
+      // ignore
     }
   }
   setTimeout(() => game.renderer.resize(), 80);
@@ -150,19 +173,13 @@ async function exitFullscreen() {
 function syncOrientation() {
   const portrait = isPortrait();
   rotateHint.hidden = !portrait;
-  if (portrait) {
-    document.body.classList.add("portrait-lock");
-  } else {
-    document.body.classList.remove("portrait-lock");
-  }
+  document.body.classList.toggle("portrait-lock", portrait);
 }
 
 async function preferLandscape() {
   try {
     const orient = screen.orientation || screen.mozOrientation || screen.msOrientation;
-    if (orient?.lock) {
-      await orient.lock("landscape");
-    }
+    if (orient?.lock) await orient.lock("landscape");
   } catch {
     // ignore
   }
@@ -172,7 +189,6 @@ function returnToTitle() {
   overlay.hide();
   game.goHome();
   titleScreen.classList.remove("hidden");
-  // 退出游戏后离开全屏，回到开始页
   exitFullscreen();
 }
 
@@ -206,10 +222,7 @@ btnRetry.addEventListener("click", async () => {
   game.start(0, true);
 });
 
-btnHome.addEventListener("click", () => {
-  returnToTitle();
-});
-
+btnHome.addEventListener("click", () => returnToTitle());
 btnExit.addEventListener("click", (e) => {
   e.preventDefault();
   e.stopPropagation();

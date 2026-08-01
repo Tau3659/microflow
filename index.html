@@ -16,63 +16,81 @@
 <body>
   <div id="rotate-hint" class="rotate-hint" hidden>
     <div class="rotate-card">
-      <p class="rotate-brand">MICROFLOW</p>
-      <p class="rotate-title">请横屏游玩</p>
-      <p class="rotate-text">旋转手机至横向，沉浸微观之海</p>
+      <p class="brand rotate-brand-mark">MICROFLOW</p>
       <div class="rotate-icon" aria-hidden="true"></div>
     </div>
   </div>
 
   <div id="app">
-    <canvas id="game" aria-label="菌流游戏画布"></canvas>
+    <canvas id="game" aria-label="MICROFLOW"></canvas>
 
     <section id="title-screen" class="screen">
       <div class="title-atmosphere" aria-hidden="true"></div>
       <div class="title-content landscape-title">
         <p class="brand">MICROFLOW</p>
         <h1 class="brand-cn">菌流</h1>
-        <p class="tagline">从原核细胞启程，吞噬细胞核，进化上行</p>
-        <button id="btn-start" class="cta" type="button">开始演化</button>
-        <p class="hint">横屏 · 红黄警示为攻击性 · 部分生物被打后会激怒</p>
+        <button id="btn-start" class="cta icon-cta" type="button" aria-label="开始">
+          <span class="icon-play" aria-hidden="true"></span>
+        </button>
+        <div class="title-signs" aria-hidden="true">
+          <span class="sign warn"></span>
+          <span class="sign calm"></span>
+          <span class="sign dna"></span>
+        </div>
       </div>
     </section>
 
     <section id="hud" class="hud hidden" aria-live="polite">
       <div class="hud-left">
-        <span class="hud-brand">菌流</span>
-        <span id="hud-layer">原核海域</span>
-        <span id="hud-form">原核细胞</span>
-        <span id="hud-protein-left">本层蛋白 42</span>
+        <div id="hud-depth" class="depth-pips" aria-label="层级"></div>
+        <div id="hud-form-pips" class="form-pips" aria-label="形态"></div>
+        <div class="meter protein-meter" title="本层蛋白">
+          <span class="meter-icon protein-icon" aria-hidden="true"></span>
+          <div class="meter-track">
+            <div id="hud-protein-fill" class="meter-fill protein-fill"></div>
+          </div>
+        </div>
       </div>
+
       <div class="hud-center">
-        <button id="btn-exit" class="exit-btn" type="button">退出游戏</button>
+        <button id="btn-exit" class="exit-btn" type="button" aria-label="退出">
+          <span class="icon-close" aria-hidden="true"></span>
+        </button>
       </div>
+
       <div class="hud-right">
-        <span id="hud-nuclei">细胞核 1 / 1</span>
-        <span id="hud-points">蛋白质 0 / 12</span>
-        <span id="hud-evolve" class="hud-evolve">收集蛋白质</span>
+        <div id="hud-nuclei" class="nuclei-row" aria-label="细胞核"></div>
+        <div class="meter evolve-meter" title="进度">
+          <span id="hud-progress-icon" class="meter-icon evolve-icon" aria-hidden="true"></span>
+          <div class="meter-track">
+            <div id="hud-progress-fill" class="meter-fill evolve-fill"></div>
+          </div>
+        </div>
+        <div id="hud-status" class="status-dot" aria-hidden="true"></div>
       </div>
     </section>
 
     <div id="controls" class="controls hidden">
-      <div id="virtual-pad" class="virtual-pad" aria-label="方向键">
+      <div id="virtual-pad" class="virtual-pad" aria-label="移动">
         <div class="pad-cross" aria-hidden="true"></div>
         <div id="virtual-knob" class="virtual-knob"></div>
-        <span class="control-label">方向</span>
       </div>
       <button id="btn-boost" class="boost-btn" type="button" aria-label="加速">
-        <span class="boost-icon">加速</span>
+        <span class="boost-chevron" aria-hidden="true"></span>
       </button>
     </div>
 
     <section id="overlay" class="screen overlay hidden">
       <div class="overlay-card">
-        <p class="overlay-brand">菌流</p>
-        <h2 id="overlay-title">细胞核被吞噬</h2>
-        <p id="overlay-text">你的细胞核被吞食，生命终止。</p>
+        <p class="brand overlay-brand-mark">MICROFLOW</p>
+        <div id="overlay-visual" class="overlay-visual end" aria-hidden="true"></div>
         <div class="overlay-actions">
-          <button id="btn-retry" class="cta" type="button">重新开始</button>
-          <button id="btn-home" class="cta ghost" type="button">返回标题</button>
+          <button id="btn-retry" class="cta icon-cta" type="button" aria-label="重试">
+            <span class="icon-retry" aria-hidden="true"></span>
+          </button>
+          <button id="btn-home" class="cta icon-cta ghost" type="button" aria-label="返回">
+            <span class="icon-home" aria-hidden="true"></span>
+          </button>
         </div>
       </div>
     </section>

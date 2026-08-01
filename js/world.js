@@ -126,7 +126,6 @@ export function createLevel(layerIndex, playerState) {
     ghosts,
     deepField,
     particles: [],
-    floats: [],
     portal: createPortal(),
     world: { ...WORLD },
     points: playerState.points,
@@ -155,17 +154,6 @@ export function spawnBurst(level, x, y, color, count = 10) {
   }
 }
 
-export function spawnFloatText(level, x, y, text, color) {
-  level.floats.push({
-    x,
-    y,
-    text,
-    color,
-    life: 1.1,
-    maxLife: 1.1,
-  });
-}
-
 /** 被吃掉时分解：一次性释放体内储存的蛋白质 + 少量 DNA */
 export function decomposeCreature(level, creature) {
   const layer = level.layer;
@@ -184,9 +172,7 @@ export function decomposeCreature(level, creature) {
   }
   spawnBurst(level, creature.x, creature.y, creature.color, 18);
   if (release > 0) {
-    spawnFloatText(level, creature.x, creature.y - 20, `释放 ${release}`, layer.protein);
-  } else {
-    spawnFloatText(level, creature.x, creature.y - 20, "分解", creature.color);
+    spawnBurst(level, creature.x, creature.y, layer.protein, 10);
   }
 }
 

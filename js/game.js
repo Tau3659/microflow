@@ -18,7 +18,6 @@ import {
 import {
   createLevel,
   spawnBurst,
-  spawnFloatText,
   decomposeCreature,
   maintainPickups,
   ecosystemProtein,
@@ -117,8 +116,8 @@ export class Game {
     const nucleiAlive = aliveNuclei(player).length;
     const missing = player.nuclei.length - nucleiAlive;
     this.hud.setInfo({
-      layer: this.level.layer.name,
-      form: evo.name,
+      layerIndex: this.level.layerIndex,
+      evolutionId: player.evolutionId,
       points: this.level.points,
       need: need === Infinity ? "MAX" : need,
       nuclei: nucleiAlive,
@@ -182,7 +181,7 @@ export class Game {
       level.bossDefeated &&
       player.evolutionId >= EVOLUTIONS.length - 1
     ) {
-      this._end("成为主宰", "你已从原核细胞演化至病毒聚合体，微观之海臣服于你。");
+      this._end("win");
     }
   }
 
@@ -204,23 +203,14 @@ export class Game {
 
       if (missing > 0) {
         player.recoverProgress = (player.recoverProgress || 0) + p.value;
-        spawnFloatText(
-          level,
-          p.x,
-          p.y,
-          `修复 ${player.recoverProgress}/${PLAYER.proteinPerNucleus}`,
-          p.color
-        );
         if (player.recoverProgress >= PLAYER.proteinPerNucleus) {
           player.recoverProgress -= PLAYER.proteinPerNucleus;
           if (restoreOneNucleus(player)) {
-            spawnFloatText(level, player.x, player.y - 28, "细胞核恢复", "#9be8d6");
-            spawnBurst(level, player.x, player.y, player.coreColor, 12);
+            spawnBurst(level, player.x, player.y, player.coreColor, 14);
           }
         }
       } else {
         level.points += p.value;
-        spawnFloatText(level, p.x, p.y, "+1", p.color);
       }
     }
 
@@ -258,13 +248,7 @@ export class Game {
     if (ecosystemProtein(level) > 0) return;
     level.proteinsExhausted = true;
     if (level.layerIndex < LAYERS.length - 1) {
-      spawnFloatText(
-        level,
-        level.player.x,
-        level.player.y - 36,
-        "本层蛋白质已尽 · 前往下一层",
-        level.layer.accent
-      );
+      spawnBurst(level, level.player.x, level.player.y, level.layer.accent, 20);
       if (level.portal) level.portal.open = true;
     }
   }
@@ -280,9 +264,7 @@ export class Game {
     level.points = 0;
     level.evolvedThisLayer = true;
     spawnBurst(level, player.x, player.y, evo.color, 28);
-    spawnFloatText(level, player.x, player.y - 30, `进化·${evo.name}`, evo.color);
 
-    // 开启通往上一层的通道
     if (level.portal && level.layerIndex < LAYERS.length - 1) {
       level.portal.open = true;
     }
@@ -296,7 +278,7 @@ export class Game {
 
     if (aliveNuclei(player).length === 0) {
       player.alive = false;
-      this._end("细胞核被吃光", "所有细胞核均被吞噬，生命终止。");
+      this._end("end");
       return;
     }
 
@@ -313,11 +295,8 @@ export class Game {
         if (mouthTouchesNucleus(playerMouth, eN, world, PLAYER.eatRangeBonus)) {
           n.alive = false;
           spawnBurst(level, eN.x, eN.y, enemy.coreColor, 8);
-          spawnFloatText(level, eN.x, eN.y, "吞核", enemy.coreColor);
-          // 可激怒生物被攻击后转为攻击性（警告色）
           if (provokeCreature(enemy)) {
-            spawnFloatText(level, enemy.x, enemy.y - 26, "激怒！", "#ff5a3c");
-            spawnBurst(level, enemy.x, enemy.y, "#ff5a3c", 10);
+            spawnBurst(level, enemy.x, enemy.y, "#ff5a3c", 12);
           }
         }
       }
@@ -328,7 +307,6 @@ export class Game {
         if (enemy.kind === "boss") {
           level.bossDefeated = true;
           level.points += 8;
-          spawnFloatText(level, enemy.x, enemy.y - 40, "Boss 分解", enemy.color);
         } else {
           level.points += 3;
         }
@@ -346,20 +324,14 @@ export class Game {
         if (mouthTouchesNucleus(enemyMouth, pN, world, PLAYER.eatRangeBonus)) {
           pn.alive = false;
           player.invuln = PLAYER.nucleusHurtCooldown;
-          spawnBurst(level, pN.x, pN.y, player.coreColor, 14);
-          spawnFloatText(level, pN.x, pN.y, "核损", "#e07a6a");
+          spawnBurst(level, pN.x, pN.y, "#e07a6a", 14);
           hit = true;
         }
       }
 
       if (aliveNuclei(player).length === 0) {
         player.alive = false;
-        this._end(
-          "细胞核被吃光",
-          enemy.kind === "boss"
-            ? `${enemy.name} 用嘴吃光了你的细胞核。`
-            : "攻击性生物用嘴吃光了你的细胞核。"
-        );
+        this._end("end");
         return;
       }
     }
@@ -375,12 +347,6 @@ export class Game {
       p.vx *= 0.95;
       p.vy *= 0.95;
       if (p.life <= 0) level.particles.splice(i, 1);
-    }
-    for (let i = level.floats.length - 1; i >= 0; i -= 1) {
-      const f = level.floats[i];
-      f.life -= dt;
-      f.y -= 22 * dt;
-      if (f.life <= 0) level.floats.splice(i, 1);
     }
   }
 
@@ -408,10 +374,10 @@ export class Game {
     }
   }
 
-  _end(title, text) {
+  _end(kind = "end") {
     this.ended = true;
     this.input.hide();
-    this.overlay.show(title, text);
+    this.overlay.show(kind);
     this.onStateChange?.("overlay");
   }
 }
