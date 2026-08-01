@@ -853,6 +853,74 @@ export function mouthTouchesPoint(mouth, x, y, radius, world, bonus = 0) {
   return off.dist < mouth.r + radius + bonus;
 }
 
+/** 圆形形态：球菌 / 集群 / 病毒 */
+export function isCircularMorph(morph) {
+  return morph === MORPH.COCCUS || morph === MORPH.COLONY || morph === MORPH.VIRUS;
+}
+
+/**
+ * 圆形玩家：进入体表圆形范围的蛋白/DNA 旋转着扫向嘴部
+ * @returns {number} 本帧仍在扫入中的数量
+ */
+export function sweepCircularIntake(player, items, world, dt) {
+  if (!player || !isCircularMorph(player.morph) || !items?.length) return 0;
+  const mouths = allMouthsWorldPos(player);
+  if (!mouths.length) return 0;
+  const catchR = player.radius * 1.1;
+  const spin = 4.2; // rad/s
+  let active = 0;
+
+  for (const item of items) {
+    const toItem = wrappedOffset(player.x, player.y, item.x, item.y, world);
+    const reach = catchR + (item.r || 0);
+    if (toItem.dist > reach) {
+      item._sweeping = false;
+      item._sweepAng = undefined;
+      continue;
+    }
+
+    // 最近嘴作为汇聚目标
+    let mouth = mouths[0];
+    let best = Infinity;
+    for (const m of mouths) {
+      const d = wrappedOffset(item.x, item.y, m.x, m.y, world).dist;
+      if (d < best) {
+        best = d;
+        mouth = m;
+      }
+    }
+    const mouthRel = wrappedOffset(player.x, player.y, mouth.x, mouth.y, world);
+
+    active += 1;
+    item._sweeping = true;
+    let ang = item._sweepAng != null ? item._sweepAng : Math.atan2(toItem.dy, toItem.dx);
+    ang += spin * dt;
+    item._sweepAng = ang;
+
+    // 半径逐渐收束，同时角向旋转
+    const shrink = 48 + (1 - toItem.dist / Math.max(1, catchR)) * 70;
+    let radial = Math.max(2.5, toItem.dist - shrink * dt);
+    // 越靠近中心，越贴向嘴的相对位置
+    const blend = clamp(1 - radial / Math.max(1, catchR), 0, 1);
+    const blendEase = blend * blend * (3 - 2 * blend);
+    const orbitX = Math.cos(ang) * radial;
+    const orbitY = Math.sin(ang) * radial;
+    const targetX = orbitX * (1 - blendEase) + mouthRel.dx * blendEase;
+    const targetY = orbitY * (1 - blendEase) + mouthRel.dy * blendEase;
+
+    item.x = player.x + targetX;
+    item.y = player.y + targetY;
+    if (world) {
+      if (item.x < 0) item.x += world.width;
+      else if (item.x >= world.width) item.x -= world.width;
+      if (item.y < 0) item.y += world.height;
+      else if (item.y >= world.height) item.y -= world.height;
+    }
+    item.phase = (item.phase || 0) + dt * 12;
+  }
+  return active;
+}
+
 /** 满条可按住加速的时长（随进化与气泡能力提升） */
 export function boostDurationFor(playerOrEvoId) {
   const evoId =

@@ -16,6 +16,7 @@ import {
   boostRingRatio,
   wrapEntity,
   wrappedOffset,
+  sweepCircularIntake,
 } from "./creature.js";
 import {
   createLevel,
@@ -245,10 +246,14 @@ export class Game {
     const world = level.world;
     const magnet = player.mods?.proteinMagnet || 0;
 
+    // 圆形形态：范围内蛋白/DNA 旋转扫向嘴部
+    sweepCircularIntake(player, level.proteins, world, dt);
+    sweepCircularIntake(player, level.dnas, world, dt);
+
     for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
       const p = level.proteins[i];
-      p.phase += 0.05;
-      if (magnet > 0) {
+      if (!p._sweeping) p.phase += 0.05;
+      if (magnet > 0 && !p._sweeping) {
         const off = wrappedOffset(player.x, player.y, p.x, p.y, world);
         if (off.dist < 40 + magnet && off.dist > 1) {
           p.x -= (off.dx / off.dist) * magnet * 0.35;
@@ -281,7 +286,7 @@ export class Game {
 
     for (let i = level.dnas.length - 1; i >= 0; i -= 1) {
       const d = level.dnas[i];
-      d.phase += 0.04;
+      if (!d._sweeping) d.phase += 0.04;
       if (!anyMouthTouchesPoint(player, d.x, d.y, d.r, world, 2)) continue;
       level.dnas.splice(i, 1);
       // DNA 也算蛋白质；可进化时额外触发进化
@@ -300,6 +305,8 @@ export class Game {
       if (!c.alive) continue;
       for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
         const p = level.proteins[i];
+        // 正被玩家漩涡吸入时，NPC 不可截胡
+        if (p._sweeping) continue;
         if (!anyMouthTouchesPoint(c, p.x, p.y, p.r, world, 1)) continue;
         c.storedProtein = (c.storedProtein || 0) + p.value;
         spawnBurst(level, p.x, p.y, p.color, 3);
