@@ -556,6 +556,8 @@ function paletteForTemper(temper, layer) {
 
 export function isAggressive(creature) {
   if (!creature || !creature.alive) return false;
+  // 逃跑/恐慌期间不再视为可攻击
+  if ((creature.panicTimer || 0) > 0) return false;
   if (creature.kind === "boss") return true;
   return !!creature.aggressive;
 }

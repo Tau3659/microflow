@@ -462,8 +462,10 @@ export class Game {
         continue;
       }
 
-      // 仅攻击性生物会用嘴吞噬玩家细胞核
-      if (player.invuln > 0 || !isAggressive(enemy)) continue;
+      // 仅攻击性生物会用嘴吞噬玩家细胞核；逃跑中不可攻击
+      if (player.invuln > 0 || !isAggressive(enemy) || (enemy.panicTimer || 0) > 0) {
+        continue;
+      }
       let hit = false;
       for (const pn of aliveNuclei(player)) {
         if (hit) break;
