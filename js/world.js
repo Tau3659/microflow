@@ -1,11 +1,19 @@
 import { getLayer, SCALE, TEMPER, WORLD } from "./config.js";
-import { createPlayer, createNormal, createBoss, createGhost } from "./creature.js";
+import {
+  createPlayer,
+  createNormal,
+  createHunter,
+  createBoss,
+  createGhost,
+} from "./creature.js";
 import { createAbilityPickup, rollAbilityDrop } from "./abilities.js";
 
-/** 将超额的固有攻击普通怪降为被动/警惕，保证 Boss 才是主要威胁 */
+/** 将超额的固有攻击普通怪降为被动/警惕，保证 Boss 才是主要威胁（猎手不计入） */
 function enforceHostileCap(creatures, layer) {
   const maxH = layer.maxHostileNormals ?? 0;
-  const hostiles = creatures.filter((c) => c.kind === "normal" && c.temper === TEMPER.HOSTILE);
+  const hostiles = creatures.filter(
+    (c) => c.kind === "normal" && c.temper === TEMPER.HOSTILE && c.role !== "hunter"
+  );
   if (hostiles.length <= maxH) return;
   // 打乱后保留前 maxH 个
   for (let i = hostiles.length - 1; i > 0; i -= 1) {
@@ -152,6 +160,13 @@ export function createLevel(layerIndex, playerState) {
   }
   // 限制普通攻击性生物数量；层数越高上限越高
   enforceHostileCap(creatures, layer);
+
+  // HUD ≥ 10：小体大嘴猎手（不计入普通敌对上限）
+  const hunters = layer.hunterCount || 0;
+  for (let i = 0; i < hunters; i += 1) {
+    const p = awayFrom(spawn.x, spawn.y, 280);
+    creatures.push(createHunter(p.x, p.y, layer));
+  }
 
   // 第一层不生成 Boss
   if (layer.hasBoss !== false && layerIndex > 0) {

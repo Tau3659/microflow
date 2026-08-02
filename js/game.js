@@ -13,6 +13,8 @@ import {
   nucleusWorldPos,
   anyMouthTouchesNucleus,
   anyMouthTouchesPoint,
+  allMouthsWorldPos,
+  forwardAngle,
   boostRingRatio,
   wrapEntity,
   wrappedOffset,
@@ -159,6 +161,8 @@ export class Game {
     const player = this.level.player;
     this.hud.setInfo({
       layerDisplay: (this.level.layerIndex ?? 0) + 1,
+      // 加速箭头对齐「中心→嘴」前进方向
+      facingAngle: forwardAngle(player),
       boostReady: !player.boostLocked && (player.boostCharge ?? 0) > 0.02,
       boosting: !!player.boosting,
       boostLocked: !!player.boostLocked,
@@ -252,18 +256,29 @@ export class Game {
     const world = level.world;
     const magnet = player.mods?.proteinMagnet || 0;
 
-    // 圆形形态：范围内蛋白/DNA 旋转扫向嘴部
+    // 圆形/不规则：范围内蛋白/DNA 旋转扫向嘴部（条形靠嘴触碰）
     sweepCircularIntake(player, level.proteins, world, dt);
     sweepCircularIntake(player, level.dnas, world, dt);
 
+    const mouths = allMouthsWorldPos(player);
     for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
       const p = level.proteins[i];
       if (!p._sweeping) p.phase += 0.05;
-      if (magnet > 0 && !p._sweeping) {
-        const off = wrappedOffset(player.x, player.y, p.x, p.y, world);
+      // 载色体磁吸也拉向最近嘴，而不是身体中心
+      if (magnet > 0 && !p._sweeping && mouths.length) {
+        let mouth = mouths[0];
+        let best = Infinity;
+        for (const m of mouths) {
+          const d = wrappedOffset(p.x, p.y, m.x, m.y, world).dist;
+          if (d < best) {
+            best = d;
+            mouth = m;
+          }
+        }
+        const off = wrappedOffset(p.x, p.y, mouth.x, mouth.y, world);
         if (off.dist < 40 + magnet && off.dist > 1) {
-          p.x -= (off.dx / off.dist) * magnet * 0.35;
-          p.y -= (off.dy / off.dist) * magnet * 0.35;
+          p.x += (off.dx / off.dist) * magnet * 0.35;
+          p.y += (off.dy / off.dist) * magnet * 0.35;
         }
       }
       if (!anyMouthTouchesPoint(player, p.x, p.y, p.r, world, 1)) continue;

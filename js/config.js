@@ -315,6 +315,15 @@ export const SPECIES = {
     elongate: true,
     aspect: 1.55,
   },
+  /** 深层猎手：小体大嘴，专咬玩家细胞核 */
+  mouthling: {
+    id: "mouthling",
+    morph: MORPH.BACILLUS,
+    flagella: 1,
+    curve: 0.2,
+    aspect: 1.55,
+    tint: "#ff6a4a",
+  },
   euglena: {
     id: "euglena",
     morph: MORPH.SPIRILLUM,
@@ -543,6 +552,8 @@ export function getLayer(depth = 0) {
     cilia: !!bossBase.cilia || complexity >= 4 || (elite && bossMorph === MORPH.COCCUS),
     aggroBoost: elite ? 1 + eliteTier * 0.06 : 1,
     skillLevel,
+    /** HUD 层数 ≥ 20：Boss 会躲避并使用战术动作 */
+    tactics: index >= 19,
   };
 
   // 混入更深主题物种，随轮次丰富
@@ -551,6 +562,10 @@ export function getLayer(depth = 0) {
     const extra = LAYER_THEMES[(index + 1) % LAYER_THEMES.length].speciesPool;
     speciesPool = speciesPool.concat(extra.slice(0, 2 + Math.min(3, cycle)));
   }
+
+  // HUD 层数 ≥ 10：出现小体大嘴猎手（专咬玩家细胞核）
+  const hunterCount =
+    index >= 9 ? Math.min(3, 1 + Math.floor((index - 9) / 6)) : 0;
 
   return {
     id: index,
@@ -572,6 +587,7 @@ export function getLayer(depth = 0) {
     speciesPool,
     complexity,
     cycle,
+    hunterCount,
     boss,
   };
 }

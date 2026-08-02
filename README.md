@@ -24,7 +24,27 @@
 ## 本地运行
 
 ```bash
-npm run serve
+npm start
 ```
 
 浏览器打开 `http://localhost:4173`。
+
+## 生物外观图鉴
+
+逐一预览 / 调整全部生物外观，再同步回游戏代码：
+
+```bash
+npm start
+```
+
+打开 `http://localhost:4173/tools/gallery.html`
+
+1. 左侧筛选/搜索并选择生物，右侧实时调参（自动保存在浏览器本地）
+2. 点 **导出 JSON**，保存为 `tools/creature-looks.json`
+3. 执行同步写回游戏代码：
+
+```bash
+npm run sync:looks
+```
+
+同步范围：`SPECIES`、玩家 `EVO_BASE`、主题 Boss、猎手默认外观。刷新游戏即可看到效果。

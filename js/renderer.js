@@ -339,7 +339,9 @@ export class Renderer {
       const cells = creature.colonyCells || 5;
       const pts = [];
       for (let i = 0; i < cells; i += 1) {
-        const a = (Math.PI * 2 * i) / cells + creature.pulse * 0.05;
+        // 中心核 + 外周；第一枚外周固定在朝向角 0（嘴正前方），不随 pulse 自旋
+        const a =
+          i <= 1 ? 0 : (Math.PI * 2 * (i - 1)) / Math.max(1, cells - 1);
         const dist =
           creature.hollow && i === 0 ? 0 : i === 0 ? 0 : r * (0.48 + (i % 3) * 0.08);
         const cx = Math.cos(a) * dist;
@@ -455,6 +457,8 @@ export class Renderer {
       }
       this.drawComplexityDetails(ctx, creature, r * 0.7, alpha, ghost);
     } else if (morph === MORPH.PHAGE) {
+      // 美术原先头朝局部 -Y；旋到 +X，使注射端与前进/嘴朝向一致
+      ctx.rotate(-Math.PI / 2);
       ctx.beginPath();
       ctx.fillStyle = bodyGrad(0, -r * 0.15, r * 0.75);
       ctx.strokeStyle = membrane;
@@ -976,7 +980,7 @@ export class Renderer {
         }
         ctx.restore();
 
-        // 嘴：按形态多点布置（吞噬判定点）
+        // 嘴：开口朝向正前方（吞噬判定点）
         const mouths = allMouthsWorldPos(creature);
         for (let mi = 0; mi < mouths.length; mi += 1) {
           const mouth = mouths[mi];
@@ -984,7 +988,8 @@ export class Renderer {
           const my = mouth.y + oy - camera.y;
           ctx.save();
           ctx.translate(mx, my);
-          ctx.rotate(mouth.facing || creature.angle);
+          // facing 可为 0（朝右），不能用 || 回退
+          ctx.rotate(Number.isFinite(mouth.facing) ? mouth.facing : creature.angle);
           const open = 0.72 + Math.sin(creature.pulse * 2.4 + mi) * 0.22;
           const lip = ctx.createRadialGradient(-mouth.r * 0.2, 0, 1, 0, 0, mouth.r);
           lip.addColorStop(0, hexToRgba("#1a3036", 0.72));
@@ -992,13 +997,25 @@ export class Renderer {
           lip.addColorStop(1, hexToRgba(creature.membrane || creature.color, 0.22));
           ctx.beginPath();
           ctx.fillStyle = lip;
+          const hunterMouth = creature.role === "hunter" || creature.bigMouth;
           ctx.strokeStyle = hexToRgba(
-            creature.kind === "player" ? "#e8c27a" : creature.coreColor || creature.color,
-            (creature.kind === "player" ? 0.7 : 0.5) * shimmer
+            creature.kind === "player"
+              ? "#e8c27a"
+              : hunterMouth
+                ? "#ffc14a"
+                : creature.coreColor || creature.color,
+            (creature.kind === "player" ? 0.7 : hunterMouth ? 0.85 : 0.5) * shimmer
           );
-          ctx.lineWidth = 1.5;
-          ctx.ellipse(0, 0, mouth.r * open, mouth.r * 0.58, 0, 0, Math.PI * 2);
+          ctx.lineWidth = hunterMouth ? 2.2 : 1.5;
+          const mouthOpen = hunterMouth ? open * 1.18 : open;
+          ctx.ellipse(0, 0, mouth.r * mouthOpen, mouth.r * (hunterMouth ? 0.7 : 0.58), 0, 0, Math.PI * 2);
           ctx.fill();
+          ctx.stroke();
+          // 前方开口示意，明确“正前方”
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba("#e8f4f2", (hunterMouth ? 0.45 : 0.28) * shimmer);
+          ctx.lineWidth = hunterMouth ? 1.4 : 1;
+          ctx.arc(mouth.r * 0.12, 0, mouth.r * (hunterMouth ? 0.62 : 0.5), -1.0, 1.0);
           ctx.stroke();
           ctx.restore();
         }
