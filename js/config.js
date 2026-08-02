@@ -482,17 +482,20 @@ export function getLayer(depth = 0) {
   const theme = LAYER_THEMES[index % LAYER_THEMES.length];
   const cycle = Math.floor(index / LAYER_THEMES.length);
   const complexity = 1 + index + cycle;
-  // 第 0 层普通怪全被动；之后攻击性缓增
+  // 第 0 层普通怪全被动；之后攻击性随层数持续上升
   const hostile =
-    index === 0 ? 0 : Math.min(0.32, 0.08 + index * 0.025 + cycle * 0.02);
-  const skittish = index === 0 ? 0 : Math.min(0.4, 0.28 + index * 0.01);
-  const passive = Math.max(0.2, 1 - hostile - skittish);
+    index === 0 ? 0 : Math.min(0.58, 0.1 + index * 0.04 + cycle * 0.03);
+  const skittish = index === 0 ? 0 : Math.min(0.38, 0.26 + index * 0.008);
+  const passive = Math.max(0.12, 1 - hostile - skittish);
+  // 层数越高，固有攻击性普通怪越多
   const maxHostileNormals =
-    index === 0 ? 0 : Math.min(6, 1 + Math.floor(index / 2) + cycle);
+    index === 0 ? 0 : Math.min(14, 1 + Math.floor(index * 0.85) + cycle * 2);
   const bossBase = theme.boss;
   // 第 5 层之后（index >= 5）：精英 Boss，体型/核/结构逐级加压
   const elite = index >= 5;
   const eliteTier = elite ? index - 4 : 0;
+  /** Boss / 精英技能等级：随层数提升，精英额外加档 */
+  const skillLevel = index === 0 ? 0 : index + (elite ? eliteTier : 0);
   const bossNuclei = elite
     ? Math.min(14, 5 + eliteTier + Math.floor(eliteTier / 2))
     : Math.min(8, 2 + Math.floor(complexity / 2));
@@ -539,6 +542,7 @@ export function getLayer(depth = 0) {
     ),
     cilia: !!bossBase.cilia || complexity >= 4 || (elite && bossMorph === MORPH.COCCUS),
     aggroBoost: elite ? 1 + eliteTier * 0.06 : 1,
+    skillLevel,
   };
 
   // 混入更深主题物种，随轮次丰富

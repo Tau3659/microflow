@@ -15,6 +15,7 @@ const btnStart = document.getElementById("btn-start");
 const btnRetry = document.getElementById("btn-retry");
 const btnHome = document.getElementById("btn-home");
 const btnExit = document.getElementById("btn-exit");
+const hudFloor = document.getElementById("hud-floor");
 const boostBtn = document.getElementById("btn-boost");
 const boostRingFill = document.getElementById("boost-ring-fill");
 const btnSettings = document.getElementById("btn-settings");
@@ -33,7 +34,16 @@ const hud = {
   hide() {
     hudEl.classList.add("hidden");
   },
-  setInfo({ boostReady, boosting, boostLocked, boostRatio = 1 } = {}) {
+  setInfo({
+    boostReady,
+    boosting,
+    boostLocked,
+    boostRatio = 1,
+    layerDisplay,
+  } = {}) {
+    if (hudFloor && layerDisplay != null) {
+      hudFloor.textContent = String(layerDisplay);
+    }
     boostBtn.classList.toggle("cooling", !!boostLocked || (!boostReady && !boosting));
     boostBtn.classList.toggle("boosting", !!boosting);
     boostBtn.classList.toggle("locked", !!boostLocked);

@@ -13,6 +13,7 @@ import {
 } from "./config.js";
 import {
   applyAbilitiesToNewPlayer,
+  applySkillLevel,
   bindMouthSync,
   recomputeAbilityMods,
 } from "./abilities.js";
@@ -685,6 +686,12 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     species.flagella ?? (morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM ? 1 : 0);
   const baseSpikes = species.spikes ?? (morph === MORPH.VIRUS ? 8 : 0);
   const baseColony = species.colonyCells ?? (morph === MORPH.COLONY ? 5 : 0);
+  const layerId = layer.id || 0;
+  // 深层攻击性 NPC 追击更紧
+  const depthAggro =
+    temper === TEMPER.HOSTILE
+      ? Math.min(1.35, 0.85 + Math.random() * 0.2 + layerId * 0.03)
+      : 0.4 + Math.random() * 0.3;
   return {
     id: nextId++,
     kind: "normal",
@@ -731,7 +738,8 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
     pulse: Math.random() * 10,
     wanderAngle: Math.random() * Math.PI * 2,
     wanderTimer: 0,
-    aggro: temper === TEMPER.HOSTILE ? 0.85 + Math.random() * 0.25 : 0.4 + Math.random() * 0.3,
+    aggro: depthAggro,
+    chaseRange: Math.min(480, 300 + layerId * 12),
     provokeFlash: 0,
     provoked: false,
     aggressionTimer: 0,
@@ -755,6 +763,8 @@ export function createBoss(x, y, layer) {
   const morph = b.morph || species.morph || MORPH.BACILLUS;
   const elite = !!b.elite || (layer.id || 0) >= 5;
   const eliteTier = b.eliteTier || Math.max(0, (layer.id || 0) - 4);
+  const skillLevel =
+    b.skillLevel ?? ((layer.id || 0) === 0 ? 0 : (layer.id || 0) + (elite ? eliteTier : 0));
   const complexity = Math.min(
     28,
     (layer.complexity || layer.id || 0) + 3 + (elite ? eliteTier * 2 : 0)
@@ -770,18 +780,23 @@ export function createBoss(x, y, layer) {
   }
   const nuclei = Math.min(14, b.nuclei || 3);
   const mouthCount = Math.min(5, 1 + Math.floor(nuclei / 2) + (elite ? 1 : 0));
-  return {
+  const skillScale = 1 + skillLevel * 0.035;
+  const boss = {
     id: nextId++,
     kind: "boss",
     name: b.name,
     species: speciesId,
     elite,
     eliteTier,
+    skillLevel,
     x,
     y,
     homeX: x,
     homeY: y,
-    territoryRadius: BOSS_AI.territoryRadius * (elite ? 1 + eliteTier * 0.04 : 1),
+    territoryRadius: BOSS_AI.territoryRadius * (elite ? 1 + eliteTier * 0.04 : 1) * skillScale,
+    aggroRadius: BOSS_AI.aggroRadius * (1 + skillLevel * 0.045),
+    leashRadius: BOSS_AI.leashRadius * (1 + skillLevel * 0.03),
+    chaseSpeedMul: 1.05 + skillLevel * 0.025 + (elite ? eliteTier * 0.01 : 0),
     aiState: "patrol",
     vx: 0,
     vy: 0,
@@ -824,7 +839,7 @@ export function createBoss(x, y, layer) {
     temper: TEMPER.HOSTILE,
     aggressive: true,
     warning: true,
-    aggro: (b.aggroBoost || 1) * (elite ? 1.05 + eliteTier * 0.03 : 1),
+    aggro: (b.aggroBoost || 1) * (elite ? 1.05 + eliteTier * 0.03 : 1) * (1 + skillLevel * 0.02),
     provokeFlash: 0,
     panicTimer: 0,
     nucleusIframes: 0,
@@ -834,6 +849,9 @@ export function createBoss(x, y, layer) {
     bodyProtein: bodyProteinFor(radius, "boss", complexity),
     dropDna: 2 + Math.floor(nuclei / 2),
   };
+  // 按层数赋予相应技能等级（鞭毛/裂口/刺突等堆叠）
+  applySkillLevel(boss, skillLevel, elite);
+  return boss;
 }
 
 /** 下一层隐约可见的幽灵生物（不可交互） */
@@ -1102,19 +1120,27 @@ function steerCreature(creature, tx, ty, dt, speedMul = 1, player = null, opts =
   let delta = targetAngle - creature.angle;
   while (delta > Math.PI) delta -= Math.PI * 2;
   while (delta < -Math.PI) delta += Math.PI * 2;
-  // 转身偏慢，避免瞬转贴脸纠缠
+  // 转身偏慢，避免瞬转贴脸纠缠；Boss 技能等级提升转向
+  const skillTurn = creature.mods?.turn || 1;
   const turn =
     opts.turnRate ??
-    (creature.panicTimer > 0 ? 1.7 : creature.kind === "boss" ? 1.25 : 0.95);
+    (creature.panicTimer > 0
+      ? 1.7
+      : creature.kind === "boss"
+        ? 1.25 * skillTurn
+        : 0.95);
   creature.angle += delta * clamp(turn * dt, 0, 1);
 
   // 大体型更慢，且整体略低于玩家常速，保证可追可逃
   const base = creature.kind === "boss" ? 86 : 98;
   let speed = base * speedScaleForRadius(creature.radius) * speedMul;
   if (player && !opts.breakCap) {
-    const cap =
-      playerCruiseSpeed(player) *
-      (creature.kind === "boss" ? PLAYER.bossSpeedFactor || 0.9 : PLAYER.npcSpeedFactor || 0.86);
+    // 技能等级略抬升 Boss 速度上限，仍略低于玩家满配
+    const skillCap =
+      creature.kind === "boss"
+        ? Math.min(0.98, (PLAYER.bossSpeedFactor || 0.9) + (creature.skillLevel || 0) * 0.008)
+        : PLAYER.npcSpeedFactor || 0.86;
+    const cap = playerCruiseSpeed(player) * skillCap;
     speed = Math.min(speed, cap);
   } else if (player && opts.breakCap) {
     // 受击逃跑时可短暂略快于玩家，拉开距离
@@ -1156,8 +1182,10 @@ function updateBoss(creature, player, dt, world, proteins = []) {
     world
   );
 
+  const aggroRadius = creature.aggroRadius || BOSS_AI.aggroRadius;
+  const leashRadius = creature.leashRadius || BOSS_AI.leashRadius;
   const inTerritory = playerToHome.dist <= creature.territoryRadius;
-  const beyondLeash = toHome.dist > BOSS_AI.leashRadius;
+  const beyondLeash = toHome.dist > leashRadius;
 
   if (creature.aiState === "chase") {
     if (!inTerritory || beyondLeash) {
@@ -1167,22 +1195,23 @@ function updateBoss(creature, player, dt, world, proteins = []) {
     if (toHome.dist < creature.territoryRadius * 0.35) {
       creature.aiState = "patrol";
     }
-  } else if (inTerritory && toPlayer.dist < BOSS_AI.aggroRadius) {
+  } else if (inTerritory && toPlayer.dist < aggroRadius) {
     creature.aiState = "chase";
   }
 
   let tx;
   let ty;
   let speedMul = 1;
+  const skillSpeed = creature.mods?.speed || 1;
 
   if (creature.aiState === "chase") {
     tx = toPlayer.dx;
     ty = toPlayer.dy;
-    speedMul = 1.05;
+    speedMul = (creature.chaseSpeedMul || 1.05) * skillSpeed;
   } else if (creature.aiState === "return") {
     tx = toHome.dx;
     ty = toHome.dy;
-    speedMul = BOSS_AI.returnSpeed;
+    speedMul = BOSS_AI.returnSpeed * skillSpeed;
   } else {
     // 领地内巡逻 / 觅食
     let nearest = null;
@@ -1311,7 +1340,7 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
   const aggressive = willAggressPlayer(creature, player);
 
   if (aggressive) {
-    const chaseRange = 320;
+    const chaseRange = creature.chaseRange || 320;
     if (toPlayer.dist < chaseRange) {
       const n = normalize(toPlayer.dx, toPlayer.dy);
       tx = n.x * creature.aggro + tx * 0.2;

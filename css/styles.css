@@ -427,13 +427,33 @@ body:-webkit-full-screen {
 .hud {
   position: absolute;
   top: 0;
+  left: 0;
   right: 0;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: flex-start;
-  padding: calc(10px + var(--safe-top)) calc(12px + var(--safe-right)) 0 0;
+  padding:
+    calc(10px + var(--safe-top))
+    calc(12px + var(--safe-right))
+    0
+    calc(14px + var(--safe-left));
   pointer-events: none;
   z-index: 2;
+}
+
+.hud-floor {
+  min-width: 2rem;
+  margin: 0;
+  padding: 0.15rem 0.1rem;
+  color: var(--text-muted);
+  font-size: 1.35rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 2rem;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  opacity: 0.85;
 }
 
 .exit-btn {

@@ -150,7 +150,7 @@ export function createLevel(layerIndex, playerState) {
     const p = awayFrom(spawn.x, spawn.y, 220);
     creatures.push(createNormal(p.x, p.y, layer, layer.requiredEvolution));
   }
-  // 限制普通攻击性生物数量，随层级缓增，突出 Boss
+  // 限制普通攻击性生物数量；层数越高上限越高
   enforceHostileCap(creatures, layer);
 
   // 第一层不生成 Boss
