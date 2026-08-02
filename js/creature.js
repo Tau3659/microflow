@@ -178,55 +178,60 @@ function makeNuclei(count, radius, morph = MORPH.COCCUS) {
 }
 
 /**
- * 嘴位规则：
- * - 圆形（球菌/病毒/团簇）：主嘴始终在朝向正前方体缘，多嘴其余绕周
- * - 条形（杆菌/螺旋菌）：单嘴在前进端，双嘴在两端
- * - 噬菌体：注射端对齐前进方向（局部 +X）
+ * 嘴位与前进方向规则：
+ * - 圆形（球菌/病毒）：单嘴在身体中心；多嘴绕中心对称分布
+ * - 条形（杆菌/螺旋菌）：嘴在长端；前进方向 = 中心→主嘴；多嘴在两端
+ * - 不规则（集群/噬菌体等）：主嘴偏置；前进方向 = 中心→主嘴
  */
 function makeMouths(morph, radius, count = 1) {
   const n = Math.max(1, count | 0);
   const baseR = Math.max(3.5, radius * PLAYER.mouthRadiusFactor * (n > 1 ? 0.82 : 1));
   const mouths = [];
 
-  if (morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM) {
+  if (isRodMorph(morph)) {
+    // 条形：主嘴在前进长端（mouthAngle=0 ⇒ 前进方向=中心→嘴）
     const tip = morph === MORPH.SPIRILLUM ? 1.08 : 1.12;
-    if (n === 1) {
-      mouths.push({ mouthAngle: 0, mouthDist: tip, mouthRadius: baseR });
-    } else {
-      // 两端
-      mouths.push({ mouthAngle: 0, mouthDist: tip, mouthRadius: baseR });
-      mouths.push({ mouthAngle: Math.PI, mouthDist: tip, mouthRadius: baseR * 0.92 });
-      for (let i = 2; i < n; i += 1) {
-        const a = (Math.PI * 2 * (i - 2)) / Math.max(1, n - 2);
-        mouths.push({ mouthAngle: a, mouthDist: tip * 0.7, mouthRadius: baseR * 0.8 });
-      }
-    }
-  } else if (morph === MORPH.PHAGE) {
-    // 注射端 = 前进方向；多嘴时后端 + 侧口
-    mouths.push({ mouthAngle: 0, mouthDist: 1.05, mouthRadius: baseR });
+    mouths.push({ mouthAngle: 0, mouthDist: tip, mouthRadius: baseR });
     if (n >= 2) {
-      mouths.push({ mouthAngle: Math.PI, mouthDist: 0.85, mouthRadius: baseR * 0.85 });
+      mouths.push({ mouthAngle: Math.PI, mouthDist: tip, mouthRadius: baseR * 0.92 });
     }
     for (let i = 2; i < n; i += 1) {
-      const a = (Math.PI * 2 * (i - 2)) / Math.max(1, n - 1) + Math.PI / 4;
-      mouths.push({ mouthAngle: a, mouthDist: 0.78, mouthRadius: baseR * 0.75 });
+      // 额外嘴靠近两端，仍保持长轴布局
+      const end = i % 2 === 0 ? 0 : Math.PI;
+      const side = (i % 4 < 2 ? 1 : -1) * 0.32;
+      mouths.push({
+        mouthAngle: end + side,
+        mouthDist: tip * 0.78,
+        mouthRadius: baseR * 0.8,
+      });
     }
-  } else if (morph === MORPH.COCCUS || morph === MORPH.VIRUS || morph === MORPH.COLONY) {
-    // 主嘴固定在朝向正前方，避免居中导致“前进方向不在嘴前”
-    const ring = morph === MORPH.COLONY ? 0.88 : morph === MORPH.VIRUS ? 0.82 : 0.78;
-    mouths.push({ mouthAngle: 0, mouthDist: ring, mouthRadius: baseR });
-    for (let i = 1; i < n; i += 1) {
-      const a = (Math.PI * 2 * i) / n;
-      mouths.push({ mouthAngle: a, mouthDist: ring, mouthRadius: baseR * 0.92 });
+  } else if (isCircularMorph(morph)) {
+    // 圆形：单嘴居中；多嘴中心对称
+    if (n === 1) {
+      mouths.push({ mouthAngle: 0, mouthDist: 0.02, mouthRadius: baseR });
+    } else {
+      const ring = morph === MORPH.VIRUS ? 0.52 : 0.46;
+      for (let i = 0; i < n; i += 1) {
+        const a = (Math.PI * 2 * i) / n;
+        mouths.push({ mouthAngle: a, mouthDist: ring, mouthRadius: baseR * 0.92 });
+      }
     }
   } else {
-    mouths.push({ mouthAngle: 0, mouthDist: 0.78, mouthRadius: baseR });
-    for (let i = 1; i < n; i += 1) {
-      mouths.push({
-        mouthAngle: (Math.PI * 2 * i) / n,
-        mouthDist: 0.7,
-        mouthRadius: baseR,
-      });
+    // 不规则：主嘴在体缘，前进方向 = 中心→主嘴（mouthAngle=0）
+    const rim =
+      morph === MORPH.PHAGE ? 1.05 : morph === MORPH.COLONY ? 0.88 : 0.82;
+    mouths.push({ mouthAngle: 0, mouthDist: rim, mouthRadius: baseR });
+    if (n === 2) {
+      mouths.push({ mouthAngle: Math.PI, mouthDist: rim * 0.9, mouthRadius: baseR * 0.9 });
+    } else {
+      for (let i = 1; i < n; i += 1) {
+        const a = (Math.PI * 2 * i) / n;
+        mouths.push({
+          mouthAngle: a,
+          mouthDist: rim * 0.92,
+          mouthRadius: baseR * 0.9,
+        });
+      }
     }
   }
 
@@ -962,17 +967,45 @@ export function mouthTouchesPoint(mouth, x, y, radius, world, bonus = 0) {
   return off.dist < mouth.r + radius + bonus;
 }
 
-/** 圆形形态：球菌 / 集群 / 病毒 */
+/** 圆形：球菌 / 病毒（嘴居中或中心对称） */
 export function isCircularMorph(morph) {
-  return morph === MORPH.COCCUS || morph === MORPH.COLONY || morph === MORPH.VIRUS;
+  return morph === MORPH.COCCUS || morph === MORPH.VIRUS;
+}
+
+/** 条形：杆菌 / 螺旋菌（嘴在长端，前进=中心→嘴） */
+export function isRodMorph(morph) {
+  return morph === MORPH.BACILLUS || morph === MORPH.SPIRILLUM;
+}
+
+/** 不规则：集群 / 噬菌体等（前进=中心→嘴） */
+export function isIrregularMorph(morph) {
+  return morph === MORPH.COLONY || morph === MORPH.PHAGE;
+}
+
+/** 以嘴为汇的旋扫吸附（圆形 + 不规则；条形靠嘴触碰吞噬） */
+export function usesMouthSweep(morph) {
+  return isCircularMorph(morph) || isIrregularMorph(morph);
+}
+
+/** 前进朝向：身体中心 → 主嘴；圆形单嘴居中时退回自身朝向 */
+export function forwardAngle(creature) {
+  if (!creature) return 0;
+  const mouths = creature.mouths;
+  if (mouths?.length) {
+    const m = mouths[0];
+    const dist = m.mouthDist ?? 0;
+    // 居中嘴不定义朝向，用身体 angle
+    if (dist > 0.08) return creature.angle + (m.mouthAngle ?? 0);
+  }
+  return creature.angle + (creature.mouthAngle ?? 0);
 }
 
 /**
- * 圆形玩家：进入体表范围的蛋白/DNA 绕最近嘴旋转并收束吸入（不以身体中心为汇）
+ * 蛋白/DNA 绕最近嘴旋转并收束吸入（汇聚点是嘴，不是身体中心）
  * @returns {number} 本帧仍在扫入中的数量
  */
 export function sweepCircularIntake(player, items, world, dt) {
-  if (!player || !isCircularMorph(player.morph) || !items?.length) return 0;
+  if (!player || !usesMouthSweep(player.morph) || !items?.length) return 0;
   const mouths = allMouthsWorldPos(player);
   if (!mouths.length) return 0;
   const catchR = player.radius * 1.15;

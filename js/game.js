@@ -14,6 +14,7 @@ import {
   anyMouthTouchesNucleus,
   anyMouthTouchesPoint,
   allMouthsWorldPos,
+  forwardAngle,
   boostRingRatio,
   wrapEntity,
   wrappedOffset,
@@ -160,7 +161,8 @@ export class Game {
     const player = this.level.player;
     this.hud.setInfo({
       layerDisplay: (this.level.layerIndex ?? 0) + 1,
-      facingAngle: player.angle,
+      // 加速箭头对齐「中心→嘴」前进方向
+      facingAngle: forwardAngle(player),
       boostReady: !player.boostLocked && (player.boostCharge ?? 0) > 0.02,
       boosting: !!player.boosting,
       boostLocked: !!player.boostLocked,
@@ -254,7 +256,7 @@ export class Game {
     const world = level.world;
     const magnet = player.mods?.proteinMagnet || 0;
 
-    // 圆形形态：范围内蛋白/DNA 旋转扫向嘴部
+    // 圆形/不规则：范围内蛋白/DNA 旋转扫向嘴部（条形靠嘴触碰）
     sweepCircularIntake(player, level.proteins, world, dt);
     sweepCircularIntake(player, level.dnas, world, dt);
 
