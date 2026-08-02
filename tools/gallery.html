@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>菌流 · 生物外观图鉴</title>
+  <link rel="stylesheet" href="gallery.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div>
+        <h1>生物外观图鉴</h1>
+        <p class="sub">逐一预览与调整 → 导出 JSON → <code>npm run sync:looks</code> 写回游戏</p>
+      </div>
+      <div class="header-actions">
+        <button id="btn-spin" type="button">暂停旋转</button>
+        <button id="btn-import" type="button">导入 JSON</button>
+        <button id="btn-export" class="primary" type="button">导出 JSON</button>
+        <button id="btn-copy-species" class="warm" type="button">复制 SPECIES 补丁</button>
+        <button id="btn-clear" class="danger" type="button">清除本地调整</button>
+        <a class="btn" href="../index.html">返回游戏</a>
+      </div>
+      <input id="import-file" type="file" accept="application/json,.json" hidden />
+    </header>
+
+    <aside class="list-panel">
+      <div class="panel-head">
+        <h2>图鉴</h2>
+        <div id="filters" class="filters">
+          <button type="button" data-filter="all" class="active">全部</button>
+          <button type="button" data-filter="morph">形态</button>
+          <button type="button" data-filter="species">物种</button>
+          <button type="button" data-filter="player">玩家</button>
+          <button type="button" data-filter="hunter">猎手</button>
+          <button type="button" data-filter="boss">Boss</button>
+        </div>
+        <input id="search" type="search" placeholder="搜索名称 / id…" />
+      </div>
+      <div id="card-list"></div>
+    </aside>
+
+    <main class="preview-panel">
+      <div class="preview-toolbar">
+        <div>
+          <h2 id="preview-title">选择一个生物</h2>
+          <div id="preview-meta" class="preview-meta">左侧图鉴点击条目开始调整</div>
+        </div>
+      </div>
+      <div id="stage-wrap">
+        <canvas id="stage" width="560" height="560" aria-label="外观预览"></canvas>
+      </div>
+    </main>
+
+    <aside class="edit-panel">
+      <div class="panel-head">
+        <h2>参数调整</h2>
+      </div>
+      <div id="edit-fields" class="edit-fields"></div>
+      <p class="hint">
+        调整会保存在浏览器本地。导出 <code>creature-looks.json</code> 到
+        <code>tools/</code> 后执行：
+        <br />
+        <code>npm run sync:looks</code>
+        <br />
+        即可把 SPECIES / 猎手相关字段写回 <code>js/config.js</code>。
+      </p>
+    </aside>
+  </div>
+
+  <div id="toast" role="status"></div>
+  <script type="module" src="gallery.js"></script>
+</body>
+</html>

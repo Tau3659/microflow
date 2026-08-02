@@ -24,7 +24,25 @@
 ## 本地运行
 
 ```bash
-npm run serve
+npm start
 ```
 
 浏览器打开 `http://localhost:4173`。
+
+## 生物外观图鉴
+
+逐一预览 / 调整全部生物外观，再同步回游戏代码：
+
+```bash
+npm start
+```
+
+打开 `http://localhost:4173/tools/gallery.html`
+
+1. 左侧选择生物，右侧调参（自动保存在浏览器本地）
+2. 点 **导出 JSON**，保存为 `tools/creature-looks.json`
+3. 执行同步：
+
+```bash
+npm run sync:looks
+```
