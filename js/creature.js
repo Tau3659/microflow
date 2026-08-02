@@ -968,27 +968,28 @@ export function isCircularMorph(morph) {
 }
 
 /**
- * 圆形玩家：进入体表圆形范围的蛋白/DNA 旋转着扫向嘴部
+ * 圆形玩家：进入体表范围的蛋白/DNA 绕最近嘴旋转并收束吸入（不以身体中心为汇）
  * @returns {number} 本帧仍在扫入中的数量
  */
 export function sweepCircularIntake(player, items, world, dt) {
   if (!player || !isCircularMorph(player.morph) || !items?.length) return 0;
   const mouths = allMouthsWorldPos(player);
   if (!mouths.length) return 0;
-  const catchR = player.radius * 1.1;
+  const catchR = player.radius * 1.15;
   const spin = 4.2; // rad/s
   let active = 0;
 
   for (const item of items) {
-    const toItem = wrappedOffset(player.x, player.y, item.x, item.y, world);
+    const toBody = wrappedOffset(player.x, player.y, item.x, item.y, world);
     const reach = catchR + (item.r || 0);
-    if (toItem.dist > reach) {
+    if (toBody.dist > reach) {
       item._sweeping = false;
       item._sweepAng = undefined;
+      item._sweepMouth = undefined;
       continue;
     }
 
-    // 最近嘴作为汇聚目标
+    // 最近嘴作为唯一汇聚中心（不吸向身体中心）
     let mouth = mouths[0];
     let best = Infinity;
     for (const m of mouths) {
@@ -998,27 +999,35 @@ export function sweepCircularIntake(player, items, world, dt) {
         mouth = m;
       }
     }
-    const mouthRel = wrappedOffset(player.x, player.y, mouth.x, mouth.y, world);
+    // 锁定本轮吸附目标嘴，避免多嘴间来回跳
+    if (item._sweepMouth != null && mouths[item._sweepMouth]) {
+      mouth = mouths[item._sweepMouth];
+    } else {
+      item._sweepMouth = mouths.indexOf(mouth);
+    }
 
+    const toMouth = wrappedOffset(mouth.x, mouth.y, item.x, item.y, world);
     active += 1;
     item._sweeping = true;
-    let ang = item._sweepAng != null ? item._sweepAng : Math.atan2(toItem.dy, toItem.dx);
+    let ang =
+      item._sweepAng != null ? item._sweepAng : Math.atan2(toMouth.dy, toMouth.dx);
     ang += spin * dt;
     item._sweepAng = ang;
 
-    // 半径逐渐收束，同时角向旋转
-    const shrink = 48 + (1 - toItem.dist / Math.max(1, catchR)) * 70;
-    let radial = Math.max(2.5, toItem.dist - shrink * dt);
-    // 越靠近中心，越贴向嘴的相对位置
-    const blend = clamp(1 - radial / Math.max(1, catchR), 0, 1);
+    // 相对嘴的半径收束；贴近嘴时几乎贴在嘴上
+    const mouthReach = Math.max(catchR, toMouth.dist + 8);
+    const shrink = 52 + (1 - toMouth.dist / Math.max(1, mouthReach)) * 80;
+    const radial = Math.max(0.8, toMouth.dist - shrink * dt);
+    const blend = clamp(1 - radial / Math.max(1, mouthReach), 0, 1);
     const blendEase = blend * blend * (3 - 2 * blend);
+    // 环绕嘴旋转，同时收束到嘴心
     const orbitX = Math.cos(ang) * radial;
     const orbitY = Math.sin(ang) * radial;
-    const targetX = orbitX * (1 - blendEase) + mouthRel.dx * blendEase;
-    const targetY = orbitY * (1 - blendEase) + mouthRel.dy * blendEase;
+    const targetX = mouth.x + orbitX * (1 - blendEase);
+    const targetY = mouth.y + orbitY * (1 - blendEase);
 
-    item.x = player.x + targetX;
-    item.y = player.y + targetY;
+    item.x = targetX;
+    item.y = targetY;
     if (world) {
       if (item.x < 0) item.x += world.width;
       else if (item.x >= world.width) item.x -= world.width;

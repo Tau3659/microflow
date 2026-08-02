@@ -13,6 +13,7 @@ import {
   nucleusWorldPos,
   anyMouthTouchesNucleus,
   anyMouthTouchesPoint,
+  allMouthsWorldPos,
   boostRingRatio,
   wrapEntity,
   wrappedOffset,
@@ -257,14 +258,25 @@ export class Game {
     sweepCircularIntake(player, level.proteins, world, dt);
     sweepCircularIntake(player, level.dnas, world, dt);
 
+    const mouths = allMouthsWorldPos(player);
     for (let i = level.proteins.length - 1; i >= 0; i -= 1) {
       const p = level.proteins[i];
       if (!p._sweeping) p.phase += 0.05;
-      if (magnet > 0 && !p._sweeping) {
-        const off = wrappedOffset(player.x, player.y, p.x, p.y, world);
+      // 载色体磁吸也拉向最近嘴，而不是身体中心
+      if (magnet > 0 && !p._sweeping && mouths.length) {
+        let mouth = mouths[0];
+        let best = Infinity;
+        for (const m of mouths) {
+          const d = wrappedOffset(p.x, p.y, m.x, m.y, world).dist;
+          if (d < best) {
+            best = d;
+            mouth = m;
+          }
+        }
+        const off = wrappedOffset(p.x, p.y, mouth.x, mouth.y, world);
         if (off.dist < 40 + magnet && off.dist > 1) {
-          p.x -= (off.dx / off.dist) * magnet * 0.35;
-          p.y -= (off.dy / off.dist) * magnet * 0.35;
+          p.x += (off.dx / off.dist) * magnet * 0.35;
+          p.y += (off.dy / off.dist) * magnet * 0.35;
         }
       }
       if (!anyMouthTouchesPoint(player, p.x, p.y, p.r, world, 1)) continue;
