@@ -799,6 +799,8 @@ body:-webkit-full-screen {
   border-width: 0 12px 20px 12px;
   border-color: transparent transparent var(--accent-warm) transparent;
   filter: drop-shadow(0 6px 0 rgba(232, 194, 122, 0.35));
+  transform-origin: 50% 60%;
+  transition: transform 0.08s linear;
 }
 
 .overlay {

@@ -136,12 +136,12 @@ function makeNuclei(count, radius, morph = MORPH.COCCUS) {
       points.push({ ox: Math.cos(a) * dist, oy: Math.sin(a) * dist });
     }
   } else if (morph === MORPH.PHAGE) {
+    // 核沿前进轴（+X）分布，与注射端/嘴朝向一致
     for (let i = 0; i < count; i += 1) {
-      const a = -Math.PI / 2 + ((i + 0.5) / count) * Math.PI * 1.7 - Math.PI * 0.85;
-      const dist = radius * (0.52 + (i % 2) * 0.24);
+      const t = count === 1 ? 0.15 : i / (count - 1);
       points.push({
-        ox: Math.cos(a) * dist,
-        oy: Math.sin(a) * dist * 0.85 - radius * 0.1,
+        ox: (t - 0.15) * radius * 1.6,
+        oy: (i % 2 === 0 ? 1 : -1) * radius * (0.18 + (i % 3) * 0.08),
       });
     }
   } else {
@@ -179,9 +179,9 @@ function makeNuclei(count, radius, morph = MORPH.COCCUS) {
 
 /**
  * 嘴位规则：
- * - 圆形（球菌/病毒/团簇感）：单嘴居中，多嘴均匀散布
- * - 条形（杆菌/螺旋菌）：单嘴在一端，双嘴在两端
- * - 噬菌体：注射端（条形一端）
+ * - 圆形（球菌/病毒/团簇）：主嘴始终在朝向正前方体缘，多嘴其余绕周
+ * - 条形（杆菌/螺旋菌）：单嘴在前进端，双嘴在两端
+ * - 噬菌体：注射端对齐前进方向（局部 +X）
  */
 function makeMouths(morph, radius, count = 1) {
   const n = Math.max(1, count | 0);
@@ -202,38 +202,31 @@ function makeMouths(morph, radius, count = 1) {
       }
     }
   } else if (morph === MORPH.PHAGE) {
-    // 条形结构：注射端为一端；多嘴时两端 + 侧口
-    mouths.push({ mouthAngle: Math.PI / 2, mouthDist: 1.05, mouthRadius: baseR });
+    // 注射端 = 前进方向；多嘴时后端 + 侧口
+    mouths.push({ mouthAngle: 0, mouthDist: 1.05, mouthRadius: baseR });
     if (n >= 2) {
-      mouths.push({ mouthAngle: -Math.PI / 2, mouthDist: 0.85, mouthRadius: baseR * 0.85 });
+      mouths.push({ mouthAngle: Math.PI, mouthDist: 0.85, mouthRadius: baseR * 0.85 });
     }
     for (let i = 2; i < n; i += 1) {
       const a = (Math.PI * 2 * (i - 2)) / Math.max(1, n - 1) + Math.PI / 4;
       mouths.push({ mouthAngle: a, mouthDist: 0.78, mouthRadius: baseR * 0.75 });
     }
   } else if (morph === MORPH.COCCUS || morph === MORPH.VIRUS || morph === MORPH.COLONY) {
-    if (n === 1) {
-      // 圆形：嘴在体心
-      mouths.push({ mouthAngle: 0, mouthDist: 0.02, mouthRadius: baseR });
-    } else {
-      // 均匀散布
-      const ring = morph === MORPH.COLONY ? 0.78 : morph === MORPH.VIRUS ? 0.72 : 0.55;
-      for (let i = 0; i < n; i += 1) {
-        const a = (Math.PI * 2 * i) / n;
-        mouths.push({ mouthAngle: a, mouthDist: ring, mouthRadius: baseR * 0.92 });
-      }
+    // 主嘴固定在朝向正前方，避免居中导致“前进方向不在嘴前”
+    const ring = morph === MORPH.COLONY ? 0.88 : morph === MORPH.VIRUS ? 0.82 : 0.78;
+    mouths.push({ mouthAngle: 0, mouthDist: ring, mouthRadius: baseR });
+    for (let i = 1; i < n; i += 1) {
+      const a = (Math.PI * 2 * i) / n;
+      mouths.push({ mouthAngle: a, mouthDist: ring, mouthRadius: baseR * 0.92 });
     }
   } else {
-    if (n === 1) {
-      mouths.push({ mouthAngle: 0, mouthDist: 0.02, mouthRadius: baseR });
-    } else {
-      for (let i = 0; i < n; i += 1) {
-        mouths.push({
-          mouthAngle: (Math.PI * 2 * i) / n,
-          mouthDist: 0.6,
-          mouthRadius: baseR,
-        });
-      }
+    mouths.push({ mouthAngle: 0, mouthDist: 0.78, mouthRadius: baseR });
+    for (let i = 1; i < n; i += 1) {
+      mouths.push({
+        mouthAngle: (Math.PI * 2 * i) / n,
+        mouthDist: 0.7,
+        mouthRadius: baseR,
+      });
     }
   }
 
@@ -935,7 +928,8 @@ export function allMouthsWorldPos(creature) {
           },
         ];
   return list.map((m) => {
-    const facing = creature.angle + (m.mouthAngle || 0);
+    // mouthAngle 可能为 0，不能用 || 否则会丢掉正前方
+    const facing = creature.angle + (m.mouthAngle ?? 0);
     const dist = creature.radius * (m.mouthDist ?? PLAYER.mouthDistFactor);
     const r =
       m.mouthRadius ||

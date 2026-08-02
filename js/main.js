@@ -18,6 +18,7 @@ const btnExit = document.getElementById("btn-exit");
 const hudFloor = document.getElementById("hud-floor");
 const boostBtn = document.getElementById("btn-boost");
 const boostRingFill = document.getElementById("boost-ring-fill");
+const boostChevron = document.querySelector("#btn-boost .boost-chevron");
 const btnSettings = document.getElementById("btn-settings");
 const settingsPanel = document.getElementById("settings-panel");
 const btnSettingsClose = document.getElementById("btn-settings-close");
@@ -40,9 +41,14 @@ const hud = {
     boostLocked,
     boostRatio = 1,
     layerDisplay,
+    facingAngle,
   } = {}) {
     if (hudFloor && layerDisplay != null) {
       hudFloor.textContent = String(layerDisplay);
+    }
+    // 三角默认朝上；加上 π/2 后与嘴/前进方向对齐
+    if (boostChevron && facingAngle != null && Number.isFinite(facingAngle)) {
+      boostChevron.style.transform = `rotate(${facingAngle + Math.PI / 2}rad)`;
     }
     boostBtn.classList.toggle("cooling", !!boostLocked || (!boostReady && !boosting));
     boostBtn.classList.toggle("boosting", !!boosting);

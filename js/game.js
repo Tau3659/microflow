@@ -159,6 +159,7 @@ export class Game {
     const player = this.level.player;
     this.hud.setInfo({
       layerDisplay: (this.level.layerIndex ?? 0) + 1,
+      facingAngle: player.angle,
       boostReady: !player.boostLocked && (player.boostCharge ?? 0) > 0.02,
       boosting: !!player.boosting,
       boostLocked: !!player.boostLocked,
