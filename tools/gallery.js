@@ -74,6 +74,41 @@ const SPECIES_SYNC_KEYS = [
   "facets",
   "legs",
   "tint",
+  "collar",
+  "budding",
+  "envelope",
+  "chromatophore",
+];
+
+/** 玩家进化 / Boss 可回写字段 */
+const EVO_SYNC_KEYS = [
+  "morph",
+  "radius",
+  "complexity",
+  "flagella",
+  "spikes",
+  "colonyCells",
+  "cilia",
+  "cellBridges",
+  "capsidFacets",
+  "organelles",
+  "membraneLayers",
+  "vacuoles",
+  "legs",
+  "color",
+  "coreColor",
+  "membrane",
+];
+
+const BOSS_SYNC_KEYS = [
+  "morph",
+  "color",
+  "membrane",
+  "flagella",
+  "spikes",
+  "colonyCells",
+  "cilia",
+  "radius",
 ];
 
 const state = {
@@ -660,9 +695,18 @@ function paintStage() {
   paintCreature(stageRenderer, creature, w, h);
 }
 
+function pickKeys(patch, keys) {
+  const clean = {};
+  for (const k of keys) {
+    if (patch[k] !== undefined) clean[k] = patch[k];
+  }
+  return clean;
+}
+
 function buildExportPayload() {
   const species = {};
   const evolutions = {};
+  const bosses = {};
   const hunter = {};
   const misc = {};
 
@@ -673,15 +717,14 @@ function buildExportPayload() {
       continue;
     }
     if (entry.syncTarget?.type === "SPECIES") {
-      const clean = {};
-      for (const k of SPECIES_SYNC_KEYS) {
-        if (patch[k] !== undefined) clean[k] = patch[k];
-      }
-      // morph 必须保留字符串
-      if (patch.morph) clean.morph = patch.morph;
+      const clean = pickKeys(patch, SPECIES_SYNC_KEYS);
       if (Object.keys(clean).length) species[entry.syncTarget.id] = clean;
     } else if (entry.syncTarget?.type === "EVOLUTION") {
-      evolutions[entry.syncTarget.id] = { ...patch };
+      const clean = pickKeys(patch, EVO_SYNC_KEYS);
+      if (Object.keys(clean).length) evolutions[entry.syncTarget.id] = clean;
+    } else if (entry.syncTarget?.type === "BOSS_THEME") {
+      const clean = pickKeys(patch, BOSS_SYNC_KEYS);
+      if (Object.keys(clean).length) bosses[entry.syncTarget.id] = clean;
     } else if (entry.syncTarget?.type === "HUNTER") {
       hunter[entry.syncTarget.id] = { ...patch };
     } else {
@@ -694,6 +737,7 @@ function buildExportPayload() {
     exportedAt: new Date().toISOString(),
     species,
     evolutions,
+    bosses,
     hunter,
     misc,
     overrides: state.overrides,
@@ -778,11 +822,21 @@ function bindUi() {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      state.overrides = data.overrides || {};
-      // 兼容仅 species 字段的文件
-      if (data.species && !data.overrides) {
-        for (const [id, patch] of Object.entries(data.species)) {
+      state.overrides = data.overrides ? { ...data.overrides } : {};
+      // 兼容仅分组字段、无 overrides 的文件
+      if (!data.overrides) {
+        for (const [id, patch] of Object.entries(data.species || {})) {
           state.overrides[`species:${id}`] = patch;
+        }
+        for (const [id, patch] of Object.entries(data.evolutions || {})) {
+          state.overrides[`evo:${id}`] = patch;
+        }
+        for (const [id, patch] of Object.entries(data.bosses || data.boss || {})) {
+          const idx = String(id).match(/(\d+)/)?.[1] ?? id;
+          state.overrides[`boss:theme${idx}`] = patch;
+        }
+        for (const [id, patch] of Object.entries(data.hunter || {})) {
+          state.overrides[`hunter:${id}`] = patch;
         }
       }
       saveOverrides();

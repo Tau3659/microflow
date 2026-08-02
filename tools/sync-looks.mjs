@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * 将 tools/creature-looks.json 中的外观补丁写回 js/config.js（SPECIES）
- * 以及 js/creature.js 中 createHunter 的默认外观字段（若存在 hunter.mouthling）
+ * 将 tools/creature-looks.json 中的外观补丁写回游戏代码：
+ * - js/config.js → SPECIES / EVO_BASE / LAYER_THEMES[].boss
+ * - js/creature.js → createHunter 默认外观（若有 hunter 补丁）
  *
  * 用法：
  *   npm run sync:looks
@@ -35,6 +36,40 @@ const SPECIES_KEYS = [
   "facets",
   "legs",
   "tint",
+  "collar",
+  "budding",
+  "envelope",
+  "chromatophore",
+];
+
+const EVO_KEYS = [
+  "morph",
+  "radius",
+  "complexity",
+  "flagella",
+  "spikes",
+  "colonyCells",
+  "cilia",
+  "cellBridges",
+  "capsidFacets",
+  "organelles",
+  "membraneLayers",
+  "vacuoles",
+  "legs",
+  "color",
+  "coreColor",
+  "membrane",
+];
+
+const BOSS_KEYS = [
+  "morph",
+  "color",
+  "membrane",
+  "flagella",
+  "spikes",
+  "colonyCells",
+  "cilia",
+  "radius",
 ];
 
 function fail(msg) {
@@ -43,15 +78,26 @@ function fail(msg) {
 }
 
 function formatValue(v) {
-  if (typeof v === "string") return JSON.stringify(v);
+  if (typeof v === "string") {
+    // morph 写成 MORPH.XXX 常量引用
+    const morphMap = {
+      bacillus: "MORPH.BACILLUS",
+      coccus: "MORPH.COCCUS",
+      spirillum: "MORPH.SPIRILLUM",
+      colony: "MORPH.COLONY",
+      virus: "MORPH.VIRUS",
+      phage: "MORPH.PHAGE",
+    };
+    if (morphMap[v]) return morphMap[v];
+    return JSON.stringify(v);
+  }
   if (typeof v === "boolean" || typeof v === "number") return String(v);
   return JSON.stringify(v);
 }
 
-/** 在 SPECIES 对象文本中定位某个 id 的 { ... } 块 */
-function findSpeciesBlock(src, id) {
-  const marker = `${id}:`;
-  const startKey = src.indexOf(marker);
+/** 在源码中定位某个标识后的平衡花括号块 */
+function findBlockAfter(src, marker, fromIndex = 0) {
+  const startKey = src.indexOf(marker, fromIndex);
   if (startKey < 0) return null;
   const braceStart = src.indexOf("{", startKey);
   if (braceStart < 0) return null;
@@ -69,37 +115,123 @@ function findSpeciesBlock(src, id) {
   return null;
 }
 
+function findSpeciesBlock(src, id) {
+  // 限定在 SPECIES 对象内，避免误匹配 speciesPool 等
+  const speciesStart = src.indexOf("export const SPECIES = {");
+  if (speciesStart < 0) return null;
+  const speciesEnd = src.indexOf("\n};", speciesStart);
+  const slice = src.slice(speciesStart, speciesEnd > 0 ? speciesEnd + 3 : undefined);
+  const local = findBlockAfter(slice, `\n  ${id}:`);
+  if (!local) return null;
+  return {
+    start: speciesStart + local.start,
+    end: speciesStart + local.end,
+    text: local.text,
+  };
+}
+
+function findEvoBaseBlock(src, evoId) {
+  const arrStart = src.indexOf("const EVO_BASE = [");
+  if (arrStart < 0) return null;
+  const arrEnd = src.indexOf("\n];", arrStart);
+  const slice = src.slice(arrStart, arrEnd > 0 ? arrEnd + 3 : undefined);
+  const marker = `id: ${Number(evoId)},`;
+  const idPos = slice.indexOf(marker);
+  if (idPos < 0) return null;
+  // 回退到该对象的 {
+  let braceStart = -1;
+  for (let i = idPos; i >= 0; i -= 1) {
+    if (slice[i] === "{") {
+      braceStart = i;
+      break;
+    }
+  }
+  if (braceStart < 0) return null;
+  let depth = 0;
+  for (let i = braceStart; i < slice.length; i += 1) {
+    if (slice[i] === "{") depth += 1;
+    else if (slice[i] === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          start: arrStart + braceStart,
+          end: arrStart + i + 1,
+          text: slice.slice(braceStart, i + 1),
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function findBossThemeBlock(src, themeIndex) {
+  const themesStart = src.indexOf("const LAYER_THEMES = [");
+  if (themesStart < 0) return null;
+  const themesEnd = src.indexOf("\n];", themesStart);
+  const slice = src.slice(themesStart, themesEnd > 0 ? themesEnd + 3 : undefined);
+
+  // 数组内 depth===0 的 {…} 即一个主题；取其 boss: { … }
+  let depth = 0;
+  let themeCount = -1;
+  let themeStart = -1;
+  for (let i = 0; i < slice.length; i += 1) {
+    const ch = slice[i];
+    if (ch === "{") {
+      if (depth === 0) {
+        themeCount += 1;
+        themeStart = i;
+      }
+      depth += 1;
+    } else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0 && themeCount === Number(themeIndex) && themeStart >= 0) {
+        const themeText = slice.slice(themeStart, i + 1);
+        const bossLocal = findBlockAfter(themeText, "boss:");
+        if (!bossLocal) return null;
+        return {
+          start: themesStart + themeStart + bossLocal.start,
+          end: themesStart + themeStart + bossLocal.end,
+          text: bossLocal.text,
+        };
+      }
+    }
+  }
+  return null;
+}
+
 function upsertField(blockText, key, value) {
   const re = new RegExp(`(^|\\n)([ \\t]*)${key}:\\s*[^,\\n]+,?`);
   const line = `${key}: ${formatValue(value)},`;
   if (re.test(blockText)) {
     return blockText.replace(re, `$1$2${line}`);
   }
-  // 插入到 id 行后或首字段后
-  const idLine = blockText.match(/id:\s*"[^"]+",?/);
+  const idLine = blockText.match(/id:\s*(?:"[^"]+"|\d+),?/);
   if (idLine) {
     return blockText.replace(idLine[0], `${idLine[0]}\n    ${line}`);
+  }
+  const nameLine = blockText.match(/name:\s*"[^"]+",?/);
+  if (nameLine) {
+    return blockText.replace(nameLine[0], `${nameLine[0]}\n      ${line}`);
   }
   return blockText.replace(/\{\s*/, `{\n    ${line}\n    `);
 }
 
-function applySpeciesPatches(configSrc, speciesPatches) {
-  let out = configSrc;
+function applyKeyedPatches(src, patches, keys, finder, label) {
+  let out = src;
   const applied = [];
-  for (const [id, patch] of Object.entries(speciesPatches || {})) {
-    const block = findSpeciesBlock(out, id);
+  for (const [id, patch] of Object.entries(patches || {})) {
+    const block = finder(out, id);
     if (!block) {
-      console.warn(`[sync-looks] 跳过未知 SPECIES: ${id}`);
+      console.warn(`[sync-looks] 跳过未知 ${label}: ${id}`);
       continue;
     }
     let text = block.text;
-    for (const key of SPECIES_KEYS) {
+    for (const key of keys) {
       if (patch[key] === undefined) continue;
       text = upsertField(text, key, patch[key]);
     }
-    // morph 若写的是 bacillus 等字符串，保持；若误写常量名则原样写入字符串
     out = out.slice(0, block.start) + text + out.slice(block.end);
-    applied.push(id);
+    applied.push(String(id));
   }
   return { out, applied };
 }
@@ -109,13 +241,6 @@ function applyHunterPatch(creatureSrc, hunterPatch) {
     return { out: creatureSrc, applied: false };
   }
   let out = creatureSrc;
-  const map = {
-    radius: /radius:\s*SCALE\.npc\s*\*\s*[0-9.]+/,
-    curve: /curve:\s*species\.curve\s*\|\|\s*[0-9.]+/,
-    aspect: /aspect:\s*species\.aspect\s*\|\|\s*[0-9.]+/,
-    flagella: /flagella:\s*[0-9]+,/,
-  };
-  // 更稳妥：替换 createHunter 内的字面默认
   if (typeof hunterPatch.curve === "number") {
     out = out.replace(
       /(createHunter[\s\S]*?curve:\s*species\.curve\s*\|\|\s*)([0-9.]+)/,
@@ -135,14 +260,12 @@ function applyHunterPatch(creatureSrc, hunterPatch) {
     );
   }
   if (typeof hunterPatch.radius === "number") {
-    // radius: SCALE.npc * 0.72  → 保持比例写法若接近 npc 比例
     const ratio = hunterPatch.radius / 20;
     out = out.replace(
       /(createHunter[\s\S]*?radius:\s*SCALE\.npc\s*\*\s*)([0-9.]+)/,
       `$1${Number(ratio.toFixed(3))}`
     );
   }
-  // mouthling SPECIES 已由 species 补丁覆盖时足够
   return { out, applied: true };
 }
 
@@ -151,15 +274,52 @@ function main() {
     fail(`找不到 ${looksPath}\n请先在图鉴页导出 JSON，保存为 tools/creature-looks.json`);
   }
   const looks = JSON.parse(fs.readFileSync(looksPath, "utf8"));
-  const configSrc = fs.readFileSync(configPath, "utf8");
+  let configSrc = fs.readFileSync(configPath, "utf8");
   const creatureSrc = fs.readFileSync(creaturePath, "utf8");
+  const originalConfig = configSrc;
 
-  const { out: nextConfig, applied } = applySpeciesPatches(configSrc, looks.species || {});
-  if (nextConfig !== configSrc) {
-    fs.writeFileSync(configPath, nextConfig);
-    console.log(`[sync-looks] 已更新 SPECIES: ${applied.join(", ") || "(无)"}`);
+  const species = applyKeyedPatches(
+    configSrc,
+    looks.species || {},
+    SPECIES_KEYS,
+    findSpeciesBlock,
+    "SPECIES"
+  );
+  configSrc = species.out;
+
+  const evoPatches = looks.evolutions || {};
+  const evo = applyKeyedPatches(configSrc, evoPatches, EVO_KEYS, findEvoBaseBlock, "EVO_BASE");
+  configSrc = evo.out;
+
+  // boss: { "0": {...}, "theme0": {...} } 或 bosses: [...]
+  const bossRaw = looks.bosses || looks.boss || {};
+  const bossNormalized = {};
+  for (const [k, v] of Object.entries(bossRaw)) {
+    const m = String(k).match(/(\d+)/);
+    if (m) bossNormalized[m[1]] = v;
+  }
+  const boss = applyKeyedPatches(
+    configSrc,
+    bossNormalized,
+    BOSS_KEYS,
+    findBossThemeBlock,
+    "LAYER_THEMES.boss"
+  );
+  configSrc = boss.out;
+
+  if (configSrc !== originalConfig) {
+    fs.writeFileSync(configPath, configSrc);
+    if (species.applied.length) {
+      console.log(`[sync-looks] 已更新 SPECIES: ${species.applied.join(", ")}`);
+    }
+    if (evo.applied.length) {
+      console.log(`[sync-looks] 已更新 EVO_BASE: ${evo.applied.join(", ")}`);
+    }
+    if (boss.applied.length) {
+      console.log(`[sync-looks] 已更新 Boss 主题: ${boss.applied.join(", ")}`);
+    }
   } else {
-    console.log("[sync-looks] SPECIES 无变更");
+    console.log("[sync-looks] config.js 无变更");
   }
 
   const hunterPatch = looks.hunter?.mouthling || looks.overrides?.["hunter:mouthling"];
