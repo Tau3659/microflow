@@ -997,19 +997,25 @@ export class Renderer {
           lip.addColorStop(1, hexToRgba(creature.membrane || creature.color, 0.22));
           ctx.beginPath();
           ctx.fillStyle = lip;
+          const hunterMouth = creature.role === "hunter" || creature.bigMouth;
           ctx.strokeStyle = hexToRgba(
-            creature.kind === "player" ? "#e8c27a" : creature.coreColor || creature.color,
-            (creature.kind === "player" ? 0.7 : 0.5) * shimmer
+            creature.kind === "player"
+              ? "#e8c27a"
+              : hunterMouth
+                ? "#ffc14a"
+                : creature.coreColor || creature.color,
+            (creature.kind === "player" ? 0.7 : hunterMouth ? 0.85 : 0.5) * shimmer
           );
-          ctx.lineWidth = 1.5;
-          ctx.ellipse(0, 0, mouth.r * open, mouth.r * 0.58, 0, 0, Math.PI * 2);
+          ctx.lineWidth = hunterMouth ? 2.2 : 1.5;
+          const mouthOpen = hunterMouth ? open * 1.18 : open;
+          ctx.ellipse(0, 0, mouth.r * mouthOpen, mouth.r * (hunterMouth ? 0.7 : 0.58), 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
           // 前方开口示意，明确“正前方”
           ctx.beginPath();
-          ctx.strokeStyle = hexToRgba("#e8f4f2", 0.28 * shimmer);
-          ctx.lineWidth = 1;
-          ctx.arc(mouth.r * 0.12, 0, mouth.r * 0.5, -1.0, 1.0);
+          ctx.strokeStyle = hexToRgba("#e8f4f2", (hunterMouth ? 0.45 : 0.28) * shimmer);
+          ctx.lineWidth = hunterMouth ? 1.4 : 1;
+          ctx.arc(mouth.r * 0.12, 0, mouth.r * (hunterMouth ? 0.62 : 0.5), -1.0, 1.0);
           ctx.stroke();
           ctx.restore();
         }

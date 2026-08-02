@@ -596,10 +596,11 @@ export function isAggressive(creature) {
   return !!creature.aggressive;
 }
 
-/** 等级低于玩家的普通 NPC 不会主动进攻（Boss 不受限） */
+/** 等级低于玩家的普通 NPC 不会主动进攻（Boss / 猎手不受限） */
 export function willAggressPlayer(creature, player) {
   if (!isAggressive(creature)) return false;
   if (creature.kind === "boss") return true;
+  if (creature.role === "hunter") return true;
   const npcLvl = creature.evolutionId ?? 0;
   const playerLvl = player?.evolutionId ?? 0;
   if (npcLvl < playerLvl) return false;
@@ -754,6 +755,81 @@ export function createNormal(x, y, layer, evolutionFloor = 0) {
   };
 }
 
+/**
+ * 深层猎手：小体、单核、大嘴；灵活追咬玩家细胞核，并躲避玩家嘴。
+ * HUD 层数 ≥ 10（layerIndex ≥ 9）生成。
+ */
+export function createHunter(x, y, layer) {
+  const species = SPECIES.mouthling || SPECIES.vibrio;
+  const morph = MORPH.BACILLUS;
+  const radius = SCALE.npc * 0.72;
+  const mouthR = Math.max(7.5, radius * 0.72);
+  const segments = [];
+  for (let i = 0; i < 3; i += 1) {
+    segments.push({ x: x - i * radius * 0.45, y });
+  }
+  return {
+    id: nextId++,
+    kind: "normal",
+    role: "hunter",
+    temper: TEMPER.HOSTILE,
+    evolutionId: Math.max(layer.requiredEvolution || 0, 99),
+    species: species.id || "mouthling",
+    x,
+    y,
+    vx: 0,
+    vy: 0,
+    angle: Math.random() * Math.PI * 2,
+    radius,
+    morph,
+    complexity: 3,
+    color: WARNING.color,
+    coreColor: WARNING.core,
+    membrane: WARNING.membrane,
+    aggressive: true,
+    warning: true,
+    bigMouth: true,
+    flagella: 1,
+    spikes: 0,
+    colonyCells: 0,
+    cilia: false,
+    organelles: 1,
+    membraneLayers: 1,
+    vacuoles: 0,
+    cellBridges: false,
+    curve: species.curve || 0.2,
+    aspect: species.aspect || 1.55,
+    elongate: true,
+    segments,
+    nuclei: makeNuclei(1, radius, morph),
+    mouths: [{ mouthAngle: 0, mouthDist: 1.15, mouthRadius: mouthR }],
+    mouthAngle: 0,
+    mouthDist: 1.15,
+    mouthRadius: mouthR,
+    pulse: Math.random() * 10,
+    wanderAngle: Math.random() * Math.PI * 2,
+    wanderTimer: 0,
+    aggro: 1.25,
+    chaseRange: 520,
+    provokeFlash: 0,
+    provoked: false,
+    aggressionTimer: 0,
+    curiousRate: 0,
+    mood: "hunt",
+    moodTimer: 0,
+    panicTimer: 0,
+    nucleusIframes: 0,
+    fleeAngle: 0,
+    dodgeSide: Math.random() < 0.5 ? 1 : -1,
+    huntPhase: "stalk",
+    huntTimer: 0.4 + Math.random() * 0.6,
+    alive: true,
+    storedProtein: 0,
+    bodyProtein: 2,
+    dropDna: 1,
+  };
+}
+
 export function createBoss(x, y, layer) {
   const b = layer.boss;
   const speciesId = b.species || "ecoli";
@@ -842,6 +918,11 @@ export function createBoss(x, y, layer) {
     panicTimer: 0,
     nucleusIframes: 0,
     fleeAngle: 0,
+    /** HUD ≥ 20：启用躲避与战术动作 */
+    tactics: !!b.tactics,
+    tacticMode: "circle",
+    tacticTimer: 0.8 + Math.random() * 0.8,
+    tacticSide: Math.random() < 0.5 ? 1 : -1,
     alive: true,
     storedProtein: 0,
     bodyProtein: bodyProteinFor(radius, "boss", complexity),
@@ -1164,23 +1245,31 @@ function steerCreature(creature, tx, ty, dt, speedMul = 1, player = null, opts =
       ? 1.7
       : creature.kind === "boss"
         ? 1.25 * skillTurn
-        : 0.95);
+        : creature.role === "hunter"
+          ? 2.2
+          : 0.95);
   creature.angle += delta * clamp(turn * dt, 0, 1);
 
   // 大体型更慢，且整体略低于玩家常速，保证可追可逃
-  const base = creature.kind === "boss" ? 86 : 98;
+  const base =
+    creature.kind === "boss" ? 86 : creature.role === "hunter" ? 118 : 98;
   let speed = base * speedScaleForRadius(creature.radius) * speedMul;
   if (player && !opts.breakCap) {
     // 技能等级略抬升 Boss 速度上限，仍略低于玩家满配
     const skillCap =
       creature.kind === "boss"
         ? Math.min(0.98, (PLAYER.bossSpeedFactor || 0.9) + (creature.skillLevel || 0) * 0.008)
-        : PLAYER.npcSpeedFactor || 0.86;
-    const cap = playerCruiseSpeed(player) * skillCap;
+        : creature.role === "hunter"
+          ? 1.05
+          : PLAYER.npcSpeedFactor || 0.86;
+    const cap = playerCruiseSpeed(player) * skillCap * (opts.speedCapMul || 1);
     speed = Math.min(speed, cap);
   } else if (player && opts.breakCap) {
-    // 受击逃跑时可短暂略快于玩家，拉开距离
-    speed = Math.min(speed, playerCruiseSpeed(player) * 1.18);
+    // 受击逃跑 / 猎手突袭 / Boss 战术时可短暂贴近或略超玩家
+    const burst =
+      opts.speedCapMul ||
+      (creature.role === "hunter" ? 1.22 : creature.tactics ? 1.15 : 1.18);
+    speed = Math.min(speed, playerCruiseSpeed(player) * burst);
   }
   creature.vx = Math.cos(creature.angle) * speed;
   creature.vy = Math.sin(creature.angle) * speed;
@@ -1193,8 +1282,15 @@ function steerCreature(creature, tx, ty, dt, speedMul = 1, player = null, opts =
 /** 细胞核被咬后：短时加速逃离，避免与玩家持续纠缠 */
 export function panicFlee(creature, player, world) {
   if (!creature || creature.kind === "boss") {
-    // Boss 也短暂后撤，但不进入长时间恐慌
-    creature.panicTimer = Math.max(creature.panicTimer || 0, 0.65);
+    // 有战术的 Boss 后撤更短，尽快转入躲避战术
+    const panic = creature.tactics ? 0.35 : 0.65;
+    creature.panicTimer = Math.max(creature.panicTimer || 0, panic);
+  } else if (creature.role === "hunter") {
+    // 猎手受击后短暂侧闪再回咬
+    creature.panicTimer = Math.max(creature.panicTimer || 0, 0.35);
+    creature.dodgeSide = Math.random() < 0.5 ? 1 : -1;
+    creature.huntPhase = "dodge";
+    creature.huntTimer = 0.35 + Math.random() * 0.25;
   } else {
     creature.panicTimer = 1.15 + Math.random() * 0.45;
   }
@@ -1205,6 +1301,126 @@ export function panicFlee(creature, player, world) {
     creature.fleeAngle = Math.atan2(-off.dy, -off.dx);
     creature.wanderAngle = creature.fleeAngle;
   }
+}
+
+/** 玩家最近存活细胞核的世界坐标 */
+function nearestPlayerNucleus(player, fromX, fromY, world) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const n of aliveNuclei(player)) {
+    const wp = nucleusWorldPos(player, n);
+    const off = wrappedOffset(fromX, fromY, wp.x, wp.y, world);
+    if (off.dist < bestDist) {
+      bestDist = off.dist;
+      best = { ...wp, dx: off.dx, dy: off.dy, dist: off.dist };
+    }
+  }
+  return best;
+}
+
+/** 距生物最近的玩家嘴威胁 */
+function nearestPlayerMouthThreat(creature, player, world) {
+  const mouths = allMouthsWorldPos(player);
+  let best = null;
+  let bestDist = Infinity;
+  for (const m of mouths) {
+    const off = wrappedOffset(creature.x, creature.y, m.x, m.y, world);
+    if (off.dist < bestDist) {
+      bestDist = off.dist;
+      best = { ...m, dx: off.dx, dy: off.dy, dist: off.dist };
+    }
+  }
+  return best;
+}
+
+const BOSS_TACTIC_MODES = ["circle", "feint", "lunge", "dodge", "flank"];
+
+function pickBossTactic(creature, forceDodge = false) {
+  if (forceDodge) {
+    creature.tacticMode = "dodge";
+    creature.tacticTimer = 0.35 + Math.random() * 0.25;
+    creature.tacticSide = Math.random() < 0.5 ? 1 : -1;
+    return;
+  }
+  const modes = BOSS_TACTIC_MODES.filter((m) => m !== "dodge" || Math.random() < 0.35);
+  creature.tacticMode = modes[Math.floor(Math.random() * modes.length)] || "circle";
+  creature.tacticTimer =
+    creature.tacticMode === "lunge"
+      ? 0.35 + Math.random() * 0.25
+      : 0.7 + Math.random() * 1.1;
+  if (Math.random() < 0.4) creature.tacticSide *= -1;
+}
+
+/**
+ * 猎手 AI：追咬玩家细胞核，贴近玩家嘴时侧向躲避。
+ */
+function updateHunter(creature, player, dt, world) {
+  const threat = nearestPlayerMouthThreat(creature, player, world);
+  const target = nearestPlayerNucleus(player, creature.x, creature.y, world);
+  const toPlayer = wrappedOffset(creature.x, creature.y, player.x, player.y, world);
+
+  creature.huntTimer = (creature.huntTimer || 0) - dt;
+  const mouthThreatR = Math.max(34, (threat?.r || 8) + creature.radius + 18);
+
+  // 玩家嘴逼近：优先躲避
+  if (threat && threat.dist < mouthThreatR) {
+    creature.huntPhase = "dodge";
+    creature.huntTimer = Math.max(creature.huntTimer, 0.28);
+    if (Math.random() < 0.04) creature.dodgeSide *= -1;
+  } else if (creature.huntTimer <= 0) {
+    if (creature.huntPhase === "dodge") {
+      creature.huntPhase = "stalk";
+      creature.huntTimer = 0.35 + Math.random() * 0.4;
+    } else if (creature.huntPhase === "stalk") {
+      creature.huntPhase = "lunge";
+      creature.huntTimer = 0.45 + Math.random() * 0.35;
+    } else {
+      creature.huntPhase = "stalk";
+      creature.huntTimer = 0.5 + Math.random() * 0.55;
+      if (Math.random() < 0.35) creature.dodgeSide *= -1;
+    }
+  }
+
+  let tx;
+  let ty;
+  let speedMul = 1.15;
+  let turnRate = 2.4;
+  let breakCap = true;
+
+  if (creature.huntPhase === "dodge" && threat) {
+    const n = normalize(threat.dx, threat.dy);
+    // 垂直于威胁嘴 + 略向后拉开
+    tx = -n.y * creature.dodgeSide * 1.4 - n.x * 0.55;
+    ty = n.x * creature.dodgeSide * 1.4 - n.y * 0.55;
+    speedMul = 1.55;
+    turnRate = 3.2;
+  } else if (target) {
+    const n = normalize(target.dx, target.dy);
+    if (creature.huntPhase === "stalk") {
+      // 侧向迂回接近核，避免对冲玩家嘴
+      tx = n.x * 0.75 - n.y * creature.dodgeSide * 0.95;
+      ty = n.y * 0.75 + n.x * creature.dodgeSide * 0.95;
+      speedMul = 1.2;
+      turnRate = 2.6;
+    } else {
+      // 突袭直扑细胞核
+      tx = n.x;
+      ty = n.y;
+      speedMul = 1.65;
+      turnRate = 2.8;
+    }
+  } else {
+    tx = toPlayer.dx;
+    ty = toPlayer.dy;
+    speedMul = 1.1;
+  }
+
+  steerCreature(creature, tx, ty, dt, speedMul, player, {
+    breakCap,
+    turnRate,
+    speedCapMul: 1.12,
+  });
+  wrapEntity(creature, world);
 }
 
 function updateBoss(creature, player, dt, world, proteins = []) {
@@ -1238,12 +1454,94 @@ function updateBoss(creature, player, dt, world, proteins = []) {
   let tx;
   let ty;
   let speedMul = 1;
+  let turnRate;
+  let breakCap = false;
   const skillSpeed = creature.mods?.speed || 1;
 
   if (creature.aiState === "chase") {
-    tx = toPlayer.dx;
-    ty = toPlayer.dy;
-    speedMul = (creature.chaseSpeedMul || 1.05) * skillSpeed;
+    if (creature.tactics) {
+      const threat = nearestPlayerMouthThreat(creature, player, world);
+      const target = nearestPlayerNucleus(player, creature.x, creature.y, world);
+      const mouthThreatR = Math.max(
+        48,
+        (threat?.r || 8) + creature.radius * 0.55 + 22
+      );
+
+      // 玩家嘴贴近 Boss 核/体：强制躲避
+      let nucleusThreatened = false;
+      if (threat) {
+        for (const n of aliveNuclei(creature)) {
+          const wp = nucleusWorldPos(creature, n);
+          const d = wrappedOffset(wp.x, wp.y, threat.x, threat.y, world).dist;
+          if (d < mouthThreatR * 0.85) {
+            nucleusThreatened = true;
+            break;
+          }
+        }
+      }
+      if ((threat && threat.dist < mouthThreatR) || nucleusThreatened) {
+        if (creature.tacticMode !== "dodge") pickBossTactic(creature, true);
+      }
+
+      creature.tacticTimer = (creature.tacticTimer || 0) - dt;
+      if (creature.tacticTimer <= 0) pickBossTactic(creature, false);
+
+      const mode = creature.tacticMode || "circle";
+      const side = creature.tacticSide || 1;
+      const nPlayer = normalize(toPlayer.dx, toPlayer.dy);
+
+      if (mode === "dodge" && threat) {
+        const n = normalize(threat.dx, threat.dy);
+        tx = -n.y * side * 1.35 - n.x * 0.7;
+        ty = n.x * side * 1.35 - n.y * 0.7;
+        speedMul = 1.35 * skillSpeed;
+        turnRate = 2.2;
+        breakCap = true;
+      } else if (mode === "circle") {
+        const prefer = Math.max(90, player.radius + creature.radius + 40);
+        const radial = toPlayer.dist > prefer ? 0.55 : -0.35;
+        tx = nPlayer.x * radial - nPlayer.y * side;
+        ty = nPlayer.y * radial + nPlayer.x * side;
+        speedMul = 1.12 * skillSpeed;
+        turnRate = 1.7;
+      } else if (mode === "feint") {
+        // 先外撤再伺机
+        tx = -nPlayer.x * 0.9 - nPlayer.y * side * 0.6;
+        ty = -nPlayer.y * 0.9 + nPlayer.x * side * 0.6;
+        speedMul = 1.05 * skillSpeed;
+        turnRate = 1.8;
+      } else if (mode === "lunge") {
+        if (target) {
+          tx = target.dx;
+          ty = target.dy;
+        } else {
+          tx = toPlayer.dx;
+          ty = toPlayer.dy;
+        }
+        speedMul = 1.45 * skillSpeed;
+        turnRate = 2.0;
+        breakCap = true;
+      } else if (mode === "flank") {
+        if (target) {
+          const n = normalize(target.dx, target.dy);
+          tx = n.x * 0.5 - n.y * side * 1.15;
+          ty = n.y * 0.5 + n.x * side * 1.15;
+        } else {
+          tx = -nPlayer.y * side;
+          ty = nPlayer.x * side;
+        }
+        speedMul = 1.2 * skillSpeed;
+        turnRate = 1.85;
+      } else {
+        tx = toPlayer.dx;
+        ty = toPlayer.dy;
+        speedMul = (creature.chaseSpeedMul || 1.05) * skillSpeed;
+      }
+    } else {
+      tx = toPlayer.dx;
+      ty = toPlayer.dy;
+      speedMul = (creature.chaseSpeedMul || 1.05) * skillSpeed;
+    }
   } else if (creature.aiState === "return") {
     tx = toHome.dx;
     ty = toHome.dy;
@@ -1287,7 +1585,11 @@ function updateBoss(creature, player, dt, world, proteins = []) {
     }
   }
 
-  steerCreature(creature, tx, ty, dt, speedMul, player);
+  steerCreature(creature, tx, ty, dt, speedMul, player, {
+    turnRate,
+    breakCap,
+    speedCapMul: creature.tactics ? 1.05 : undefined,
+  });
   wrapEntity(creature, world);
 }
 
@@ -1340,6 +1642,27 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
 
   // 细胞核被吃后的短时加速逃跑
   if ((creature.panicTimer || 0) > 0) {
+    if (creature.role === "hunter") {
+      // 猎手恐慌：侧向拉开，结束即回咬
+      const ang = creature.fleeAngle ?? Math.atan2(-toPlayer.dy, -toPlayer.dx);
+      const side = creature.dodgeSide || 1;
+      steerCreature(
+        creature,
+        Math.cos(ang) * 0.55 - Math.sin(ang) * side,
+        Math.sin(ang) * 0.55 + Math.cos(ang) * side,
+        dt,
+        1.8,
+        player,
+        { breakCap: true, turnRate: 3.0, speedCapMul: 1.25 }
+      );
+      wrapEntity(creature, world);
+      if (creature.panicTimer <= 0) {
+        creature.mood = "hunt";
+        creature.huntPhase = "stalk";
+        creature.huntTimer = 0.25;
+      }
+      return;
+    }
     const ang = creature.fleeAngle ?? Math.atan2(-toPlayer.dy, -toPlayer.dx);
     steerCreature(
       creature,
@@ -1352,6 +1675,12 @@ export function updateEnemy(creature, player, dt, world, proteins = []) {
     );
     wrapEntity(creature, world);
     if (creature.panicTimer <= 0) creature.mood = "idle";
+    return;
+  }
+
+  // 猎手：专属追核 + 躲嘴 AI
+  if (creature.role === "hunter") {
+    updateHunter(creature, player, dt, world);
     return;
   }
 
