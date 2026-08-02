@@ -121,3 +121,34 @@ export function applyAbilitiesToNewPlayer(player, savedCounts) {
   player.abilities = { ...emptyAbilityCounts(), ...(savedCounts || {}) };
   recomputeAbilityMods(player);
 }
+
+/**
+ * 按技能等级为 Boss / 精英分配能力堆叠。
+ * skillLevel 越高，速度/转向/嘴数/防御等加成越多。
+ */
+export function skillAbilityCounts(skillLevel = 0, elite = false) {
+  const s = Math.max(0, skillLevel | 0);
+  const eliteBonus = elite ? 1 : 0;
+  const counts = emptyAbilityCounts();
+  counts.flagella = Math.min(5, Math.floor(s / 2) + eliteBonus);
+  counts.cilia = Math.min(4, Math.floor(s / 3) + eliteBonus);
+  counts.cellWall = Math.min(3, Math.floor(s / 3));
+  counts.buccal = Math.min(4, Math.floor((s + 1) / 2));
+  counts.polyMouth = Math.min(3, Math.floor(s / (elite ? 3 : 4)) + (elite && s >= 3 ? 1 : 0));
+  counts.capsule = Math.min(3, Math.floor(s / 4) + eliteBonus);
+  counts.gasVacuole = Math.min(3, Math.floor(s / 4));
+  counts.chromatophore = Math.min(2, Math.floor(s / 5));
+  counts.spikeProtein = Math.min(3, Math.max(0, Math.floor((s - 2) / 3) + eliteBonus));
+  counts.plasmid = Math.min(2, Math.floor(s / 5));
+  counts.endospore = Math.min(2, Math.floor(s / 6));
+  return counts;
+}
+
+/** 将技能等级对应的能力写到生物上（Boss / 精英） */
+export function applySkillLevel(creature, skillLevel = 0, elite = false) {
+  if (!creature) return creature;
+  creature.skillLevel = Math.max(0, skillLevel | 0);
+  creature.abilities = skillAbilityCounts(creature.skillLevel, elite);
+  recomputeAbilityMods(creature);
+  return creature;
+}
