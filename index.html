@@ -55,24 +55,23 @@
 
     <section id="hud" class="hud hidden" aria-live="polite">
       <span id="hud-floor" class="hud-floor" aria-label="层数">1</span>
+      <div id="meter-protein" class="meter hud-meter-protein">
+        <span class="meter-icon protein-icon" aria-hidden="true"></span>
+        <div class="meter-track">
+          <div id="protein-fill" class="meter-fill protein-fill"></div>
+        </div>
+      </div>
+      <div id="meter-dna" class="meter hud-meter-dna">
+        <span id="dna-icon" class="meter-icon evolve-icon" aria-hidden="true"></span>
+        <div class="meter-track">
+          <div id="dna-fill" class="meter-fill evolve-fill"></div>
+        </div>
+      </div>
+      <div id="hud-nuclei" class="nuclei-row" aria-label="细胞核"></div>
       <button id="btn-exit" class="exit-btn" type="button" aria-label="退出">
         <span class="icon-close" aria-hidden="true"></span>
       </button>
     </section>
-
-    <div id="controls" class="controls hidden">
-      <div id="virtual-pad" class="virtual-pad" aria-label="移动">
-        <div class="pad-cross" aria-hidden="true"></div>
-        <div id="virtual-knob" class="virtual-knob"></div>
-      </div>
-      <button id="btn-boost" class="boost-btn" type="button" aria-label="加速">
-        <svg class="boost-ring" viewBox="0 0 72 72" aria-hidden="true">
-          <circle class="boost-ring-track" cx="36" cy="36" r="32" />
-          <circle id="boost-ring-fill" class="boost-ring-fill" cx="36" cy="36" r="32" />
-        </svg>
-        <span class="boost-chevron" aria-hidden="true"></span>
-      </button>
-    </div>
 
     <section id="overlay" class="screen overlay hidden">
       <div class="overlay-card">

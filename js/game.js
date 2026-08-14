@@ -13,7 +13,6 @@ import {
   nucleusWorldPos,
   anyMouthTouchesNucleus,
   anyMouthTouchesPoint,
-  boostRingRatio,
   wrapEntity,
   wrappedOffset,
   sweepCircularIntake,
@@ -31,12 +30,12 @@ import { Input } from "./input.js";
 import { audio } from "./audio.js";
 
 export class Game {
-  constructor({ canvas, controlsRoot, hud, overlay }) {
+  constructor({ canvas, hud, overlay }) {
     this.canvas = canvas;
     this.hud = hud;
     this.overlay = overlay;
     this.renderer = new Renderer(canvas);
-    this.input = new Input(controlsRoot);
+    this.input = new Input(canvas);
     this.level = null;
     this.camera = { x: 0, y: 0 };
     this.running = false;
@@ -131,15 +130,20 @@ export class Game {
   }
 
   _centerCamera(hard = false) {
-    const targetX = this.level.player.x - this.renderer.w * 0.5;
-    const targetY = this.level.player.y - this.renderer.h * 0.48;
-    if (hard) {
-      this.camera.x = targetX;
-      this.camera.y = targetY;
-      return;
+    const player = this.level.player;
+    let leadX = (this.input.aimX || 0) * 0.2;
+    let leadY = (this.input.aimY || 0) * 0.2;
+    const leadLen = Math.hypot(leadX, leadY);
+    const leadMax = 72;
+    if (leadLen > leadMax) {
+      leadX = (leadX / leadLen) * leadMax;
+      leadY = (leadY / leadLen) * leadMax;
     }
-    this.camera.x += (targetX - this.camera.x) * 0.14;
-    this.camera.y += (targetY - this.camera.y) * 0.14;
+    const targetX = player.x - this.renderer.w * 0.5 + leadX;
+    const targetY = player.y - this.renderer.h * 0.48 + leadY;
+    const k = hard ? 1 : 0.12;
+    this.camera.x += (targetX - this.camera.x) * k;
+    this.camera.y += (targetY - this.camera.y) * k;
   }
 
   _canEvolve() {
@@ -157,12 +161,19 @@ export class Game {
 
   _updateHud() {
     const player = this.level.player;
+    const evo = getEvolution(player.evolutionId);
+    const need = evo.pointsToEvolve || 1;
+    const missing = player.nuclei.length - aliveNuclei(player).length;
+    const recoverNeed = player.mods?.recoverNeed || PLAYER.proteinPerNucleus;
     this.hud.setInfo({
       layerDisplay: (this.level.layerIndex ?? 0) + 1,
-      boostReady: !player.boostLocked && (player.boostCharge ?? 0) > 0.02,
-      boosting: !!player.boosting,
-      boostLocked: !!player.boostLocked,
-      boostRatio: boostRingRatio(player),
+      points: this.level.points || 0,
+      pointsToEvolve: need,
+      canEvolve: this._canEvolve(),
+      nuclei: (player.nuclei || []).map((n) => !!n.alive),
+      recovering: missing > 0,
+      recoverRatio: missing > 0 ? (player.recoverProgress || 0) / recoverNeed : 0,
+      proteinsExhausted: !!this.level.proteinsExhausted,
     });
   }
 
@@ -173,13 +184,20 @@ export class Game {
     this._update(dt);
     const tr = this.transition;
     const trAlpha = tr ? (tr.phase === "out" ? tr.t : 1 - tr.t) : 0;
+    let zoom = 1;
+    if (tr) {
+      const u = Math.min(1, Math.max(0, tr.t));
+      const wave = tr.phase === "out" ? u : 1 - u;
+      zoom = 1 + 0.07 * Math.sin(wave * Math.PI);
+    }
     this.renderer.render(
       this.level,
       this.camera,
       this._canEvolve(),
       this._portalOpen(),
       trAlpha,
-      tr?.accent || null
+      tr?.accent || null,
+      zoom
     );
     this.raf = requestAnimationFrame((t) => this._loop(t));
   }
@@ -191,6 +209,7 @@ export class Game {
     const level = this.level;
     const player = level.player;
 
+    this.input.refresh(player, this.camera, this.renderer.w, this.renderer.h);
     updatePlayer(player, this.input, dt);
     if (player.evolutionTween) updateEvolution(player, dt);
     const wrap = wrapEntity(player, level.world);

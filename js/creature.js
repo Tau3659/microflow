@@ -1084,8 +1084,13 @@ export function updatePlayer(player, input, dt) {
   const boosting = !!player.boosting;
   const sizeScale = speedScaleForRadius(player.radius);
   const speedMul = player.mods?.speed || 1;
-  const speed = (boosting ? PLAYER.boostSpeed : PLAYER.baseSpeed) * sizeScale * speedMul;
   const turnMul = player.mods?.turn || 1;
+  const evolveSlow = player.evolutionTween ? 0.42 : 1;
+  const mag = clamp(input.pull ?? Math.hypot(input.dirX, input.dirY), 0, 1);
+  const cruise = PLAYER.baseSpeed * sizeScale * speedMul;
+  const sprint = PLAYER.boostSpeed * sizeScale * speedMul;
+  // 拉力映射到常速；拉满并按住才吃加速槽冲到上限
+  const speed = (boosting ? sprint : cruise * mag) * evolveSlow;
 
   if (input.moving) {
     const targetAngle = Math.atan2(input.dirY, input.dirX);
@@ -1094,10 +1099,8 @@ export function updatePlayer(player, input, dt) {
     while (delta < -Math.PI) delta += Math.PI * 2;
     player.angle += delta * clamp(PLAYER.turnRate * turnMul * dt, 0, 1);
 
-    const mag = clamp(Math.hypot(input.dirX, input.dirY), 0, 1);
-    const evolveSlow = player.evolutionTween ? 0.42 : 1;
-    player.vx = Math.cos(player.angle) * speed * mag * evolveSlow;
-    player.vy = Math.sin(player.angle) * speed * mag * evolveSlow;
+    player.vx = Math.cos(player.angle) * speed;
+    player.vy = Math.sin(player.angle) * speed;
   } else {
     player.vx *= Math.pow(0.04, dt);
     player.vy *= Math.pow(0.04, dt);

@@ -957,11 +957,22 @@ export class Renderer {
           Math.sin(this.time * 2.2 + (creature.id || 0) * 0.7) * 0.1;
         const bodyAlpha = (creature.kind === "player" ? 0.78 : 0.64) * shimmer;
 
-        if (creature.kind === "player" && creature.boosting) {
+        if (creature.kind === "player") {
+          const ratio = Math.max(0, Math.min(1, creature.boostCharge ?? 1));
+          const ringR = creature.radius * 1.48;
           ctx.beginPath();
-          ctx.strokeStyle = hexToRgba("#e8c27a", 0.28 * shimmer);
-          ctx.lineWidth = 1.6;
-          ctx.arc(0, 0, creature.radius * 1.35, 0, Math.PI * 2);
+          ctx.strokeStyle = hexToRgba("#e8f4f2", 0.1 * shimmer);
+          ctx.lineWidth = 1.5;
+          ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba(
+            creature.boosting ? "#e8c27a" : creature.boostLocked ? "#6a8a86" : "#3ecfb0",
+            (0.35 + ratio * 0.35) * shimmer
+          );
+          ctx.lineWidth = creature.boosting ? 2.4 : 2;
+          ctx.lineCap = "round";
+          ctx.arc(0, 0, ringR, -Math.PI / 2, -Math.PI / 2 + ratio * Math.PI * 2);
           ctx.stroke();
         }
         // 进化过渡：旧形态淡出、新形态淡入，体现成长而非瞬变
@@ -1129,7 +1140,10 @@ export class Renderer {
     const ctx = this.ctx;
     const a = Math.max(0, Math.min(1, alpha));
     ctx.save();
-    ctx.fillStyle = `rgba(3, 16, 22, ${a * 0.92})`;
+    // 过门：色温罩 + 浅景深暗角（青门冷、琥珀门暖）
+    ctx.fillStyle = hexToRgba(accent, a * 0.18);
+    ctx.fillRect(0, 0, this.w, this.h);
+    ctx.fillStyle = `rgba(3, 16, 22, ${a * 0.78})`;
     ctx.fillRect(0, 0, this.w, this.h);
     const g = ctx.createRadialGradient(
       this.w * 0.5,
@@ -1139,10 +1153,22 @@ export class Renderer {
       this.h * 0.5,
       Math.max(this.w, this.h) * 0.55
     );
-    g.addColorStop(0, hexToRgba(accent, 0.35 * a));
-    g.addColorStop(0.45, hexToRgba(accent, 0.12 * a));
+    g.addColorStop(0, hexToRgba(accent, 0.42 * a));
+    g.addColorStop(0.4, hexToRgba(accent, 0.12 * a));
     g.addColorStop(1, "rgba(3,16,22,0)");
     ctx.fillStyle = g;
+    ctx.fillRect(0, 0, this.w, this.h);
+    const vig = ctx.createRadialGradient(
+      this.w * 0.5,
+      this.h * 0.5,
+      Math.min(this.w, this.h) * 0.18,
+      this.w * 0.5,
+      this.h * 0.5,
+      Math.max(this.w, this.h) * 0.72
+    );
+    vig.addColorStop(0, "rgba(3,16,22,0)");
+    vig.addColorStop(1, `rgba(3, 16, 22, ${0.55 * a})`);
+    ctx.fillStyle = vig;
     ctx.fillRect(0, 0, this.w, this.h);
     // 漂浮微粒
     for (let i = 0; i < 24; i += 1) {
@@ -1169,10 +1195,17 @@ export class Renderer {
     }
   }
 
-  render(level, camera, canEvolve, portalOpen, transitionAlpha = 0, transitionAccent = null) {
+  render(level, camera, canEvolve, portalOpen, transitionAlpha = 0, transitionAccent = null, zoom = 1) {
     this.time += 0.016;
     const p = level.player;
     const world = level.world;
+    const z = zoom || 1;
+    if (z !== 1) {
+      this.ctx.save();
+      this.ctx.translate(this.w * 0.5, this.h * 0.5);
+      this.ctx.scale(z, z);
+      this.ctx.translate(-this.w * 0.5, -this.h * 0.5);
+    }
 
     // 背景轻微逆向相对运动（不宜晃动过猛）
     this.counterFlow.x -= p.vx * 0.012;
@@ -1214,5 +1247,6 @@ export class Renderer {
         transitionAccent || level.layer?.accent || "#3ecfb0"
       );
     }
+    if (z !== 1) this.ctx.restore();
   }
 }

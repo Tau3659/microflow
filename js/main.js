@@ -5,7 +5,6 @@ const app = document.getElementById("app");
 const canvas = document.getElementById("game");
 const titleScreen = document.getElementById("title-screen");
 const hudEl = document.getElementById("hud");
-const controlsRoot = document.getElementById("controls");
 const overlayEl = document.getElementById("overlay");
 const overlayVisual = document.getElementById("overlay-visual");
 const scoreLayer = document.getElementById("score-layer");
@@ -16,8 +15,12 @@ const btnRetry = document.getElementById("btn-retry");
 const btnHome = document.getElementById("btn-home");
 const btnExit = document.getElementById("btn-exit");
 const hudFloor = document.getElementById("hud-floor");
-const boostBtn = document.getElementById("btn-boost");
-const boostRingFill = document.getElementById("boost-ring-fill");
+const meterProtein = document.getElementById("meter-protein");
+const proteinFill = document.getElementById("protein-fill");
+const meterDna = document.getElementById("meter-dna");
+const dnaFill = document.getElementById("dna-fill");
+const dnaIcon = document.getElementById("dna-icon");
+const hudNuclei = document.getElementById("hud-nuclei");
 const btnSettings = document.getElementById("btn-settings");
 const settingsPanel = document.getElementById("settings-panel");
 const btnSettingsClose = document.getElementById("btn-settings-close");
@@ -25,8 +28,6 @@ const toggleMusic = document.getElementById("toggle-music");
 const toggleSfx = document.getElementById("toggle-sfx");
 const volMusic = document.getElementById("vol-music");
 const volSfx = document.getElementById("vol-sfx");
-const BOOST_RING_LEN = 2 * Math.PI * 32;
-
 const hud = {
   show() {
     hudEl.classList.remove("hidden");
@@ -35,22 +36,42 @@ const hud = {
     hudEl.classList.add("hidden");
   },
   setInfo({
-    boostReady,
-    boosting,
-    boostLocked,
-    boostRatio = 1,
     layerDisplay,
+    points = 0,
+    pointsToEvolve = 1,
+    canEvolve = false,
+    nuclei = [],
+    recovering = false,
+    recoverRatio = 0,
+    proteinsExhausted = false,
   } = {}) {
     if (hudFloor && layerDisplay != null) {
       hudFloor.textContent = String(layerDisplay);
     }
-    boostBtn.classList.toggle("cooling", !!boostLocked || (!boostReady && !boosting));
-    boostBtn.classList.toggle("boosting", !!boosting);
-    boostBtn.classList.toggle("locked", !!boostLocked);
-    if (boostRingFill) {
-      const ratio = Math.max(0, Math.min(1, boostRatio));
-      boostRingFill.style.strokeDasharray = `${BOOST_RING_LEN}`;
-      boostRingFill.style.strokeDashoffset = `${BOOST_RING_LEN * (1 - ratio)}`;
+    const pRatio = Math.max(0, Math.min(1, points / Math.max(1, pointsToEvolve)));
+    if (proteinFill) proteinFill.style.width = `${pRatio * 100}%`;
+    meterProtein?.classList.toggle("exhausted", !!proteinsExhausted);
+    if (dnaFill) {
+      if (recovering) {
+        dnaFill.style.width = `${Math.max(0, Math.min(1, recoverRatio)) * 100}%`;
+        dnaFill.classList.add("recover");
+        dnaIcon?.classList.add("recover");
+        dnaIcon?.classList.remove("portal");
+      } else {
+        dnaFill.style.width = `${(canEvolve ? 1 : pRatio) * 100}%`;
+        dnaFill.classList.remove("recover");
+        dnaIcon?.classList.remove("recover");
+        dnaIcon?.classList.toggle("portal", !!canEvolve);
+      }
+    }
+    if (hudNuclei) {
+      const html = nuclei
+        .map((on) => `<span class="${on ? "on" : "off"}"></span>`)
+        .join("");
+      if (hudNuclei.dataset.sig !== html) {
+        hudNuclei.dataset.sig = html;
+        hudNuclei.innerHTML = html;
+      }
     }
   },
 };
@@ -71,7 +92,7 @@ const overlay = {
   },
 };
 
-const game = new Game({ canvas, controlsRoot, hud, overlay });
+const game = new Game({ canvas, hud, overlay });
 game.init();
 
 function syncSettingsUi() {
@@ -159,13 +180,7 @@ function syncOrientation() {
   const portrait = isPortrait();
   document.body.classList.toggle("is-portrait", portrait);
   document.body.classList.toggle("is-landscape", !portrait);
-  const knob = document.getElementById("virtual-knob");
-  if (knob) knob.style.transform = "translate(-50%, -50%)";
-  game.input.dirX = 0;
-  game.input.dirY = 0;
-  game.input.boostPressed = false;
-  boostBtn.classList.remove("active");
-  document.getElementById("virtual-pad")?.classList.remove("active");
+  game.input.hide();
 }
 
 function returnToTitle() {
@@ -252,6 +267,14 @@ document.addEventListener(
   "touchmove",
   (e) => {
     if (!titleScreen.classList.contains("hidden")) return;
+    e.preventDefault();
+  },
+  { passive: false }
+);
+
+document.addEventListener(
+  "gesturestart",
+  (e) => {
     e.preventDefault();
   },
   { passive: false }
