@@ -113,7 +113,7 @@ export class Renderer {
 
   /**
    * 镜圈内双层视差：慢光斑/远菌影 0.25，近碎屑 0.55，位移与游动相反。
-   * 圈外仍由载玻片实黑盖住。密度宁稀。
+   * 圈外仍由载玻片实黑盖住。快层圈内保持 12–16 粒可读。
    */
   drawMotionParallax(level, camera, zoom = 1) {
     const ctx = this.ctx;
@@ -140,8 +140,8 @@ export class Renderer {
       const by = this._wrapShift(i * 271 + 80, srcY * slowK, spanSY, 120);
       const br = 42 + (i % 4) * 12;
       const g = ctx.createRadialGradient(bx, by, 4, bx, by, br);
-      g.addColorStop(0, hexToRgba(accent, 0.14));
-      g.addColorStop(0.45, hexToRgba(accent, 0.05));
+      g.addColorStop(0, hexToRgba(accent, 0.22));
+      g.addColorStop(0.45, hexToRgba(accent, 0.08));
       g.addColorStop(1, hexToRgba(accent, 0));
       ctx.fillStyle = g;
       ctx.beginPath();
@@ -154,25 +154,24 @@ export class Renderer {
       ctx.save();
       ctx.translate(bx, by);
       ctx.rotate(i * 0.9);
-      ctx.fillStyle = hexToRgba(accent, 0.08);
+      ctx.fillStyle = hexToRgba(accent, 0.14);
       ctx.beginPath();
       ctx.ellipse(0, 0, 38 + i * 6, 14 + i * 2, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
 
-    const spanFX = this.w + 70;
-    const spanFY = this.h + 70;
-    for (let i = 0; i < 28; i += 1) {
-      const px = this._wrapShift(i * 173 + 20, srcX * fastK, spanFX, 35);
-      const py = this._wrapShift(i * 149 + 30, srcY * fastK, spanFY, 35);
-      const bright = 0.48 + (i % 4) * 0.08;
+    const field = Math.max(160, clipR * 1.85);
+    for (let i = 0; i < 16; i += 1) {
+      const px = cx + this._wrapShift(i * 97 + 11, srcX * fastK, field, field * 0.5);
+      const py = cy + this._wrapShift(i * 83 + 19, srcY * fastK, field, field * 0.5);
+      const bright = 0.66 + (i % 4) * 0.08;
       ctx.fillStyle = hexToRgba(i % 3 === 0 ? protein : "#e8f4f2", bright);
       ctx.beginPath();
       if (i % 4 === 0) {
-        ctx.ellipse(px, py, 2.8, 1.2, i * 0.6, 0, Math.PI * 2);
+        ctx.ellipse(px, py, 3.6, 1.5, i * 0.6, 0, Math.PI * 2);
       } else {
-        ctx.arc(px, py, 1.7 + (i % 3) * 0.55, 0, Math.PI * 2);
+        ctx.arc(px, py, 2.3 + (i % 3) * 0.5, 0, Math.PI * 2);
       }
       ctx.fill();
     }
