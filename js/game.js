@@ -184,12 +184,6 @@ export class Game {
     this._update(dt);
     const tr = this.transition;
     const trAlpha = tr ? (tr.phase === "out" ? tr.t : 1 - tr.t) : 0;
-    let zoom = 1;
-    if (tr) {
-      const u = Math.min(1, Math.max(0, tr.t));
-      const wave = tr.phase === "out" ? u : 1 - u;
-      zoom = 1 + 0.07 * Math.sin(wave * Math.PI);
-    }
     this.renderer.render(
       this.level,
       this.camera,
@@ -197,7 +191,7 @@ export class Game {
       this._portalOpen(),
       trAlpha,
       tr?.accent || null,
-      zoom
+      1
     );
     this.raf = requestAnimationFrame((t) => this._loop(t));
   }
@@ -428,7 +422,7 @@ export class Game {
     this.transition = {
       phase: "out",
       t: 0,
-      duration: 0.7,
+      duration: 0.48,
       nextLayer,
       accent: accent || null,
     };

@@ -517,8 +517,8 @@ body.is-landscape .exit-btn {
 .hud-floor {
   min-width: 2rem;
   margin: 0;
-  padding: 0.15rem 0.1rem;
-  color: var(--text-muted);
+  padding: 0.2rem 0.65rem;
+  color: var(--text);
   font-size: 1.35rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -526,7 +526,15 @@ body.is-landscape .exit-btn {
   line-height: 2rem;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
   pointer-events: none;
-  opacity: 0.85;
+  opacity: 0.92;
+  border-radius: 42% 58% 48% 52%;
+  background:
+    radial-gradient(ellipse at 35% 30%, rgba(255, 255, 255, 0.22), transparent 55%),
+    radial-gradient(ellipse at 50% 50%, rgba(62, 207, 176, 0.2), rgba(3, 16, 22, 0.15) 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 10px rgba(62, 207, 176, 0.18);
+  border: 1px solid rgba(62, 207, 176, 0.28);
 }
 
 .exit-btn {
@@ -534,15 +542,20 @@ body.is-landscape .exit-btn {
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid rgba(232, 244, 242, 0.18);
+  border: 1px solid rgba(62, 207, 176, 0.4);
   border-radius: 50%;
-  background: rgba(3, 16, 22, 0.28);
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.28), transparent 42%),
+    radial-gradient(circle at 50% 50%, rgba(8, 40, 44, 0.35), rgba(3, 16, 22, 0.55));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 8px rgba(62, 207, 176, 0.22);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   pointer-events: auto;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 .exit-btn:active {
@@ -589,9 +602,12 @@ body.is-landscape .exit-btn {
 }
 
 .nuclei-row span {
-  width: 11px;
-  height: 11px;
-  border: 1px solid rgba(232, 244, 242, 0.28);
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid rgba(62, 207, 176, 0.35);
+  box-shadow:
+    inset 0 0 0 2px rgba(3, 16, 22, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .nuclei-row span.on {
@@ -624,12 +640,19 @@ body.is-landscape .exit-btn {
 }
 
 .meter-track {
+  position: relative;
   flex: 1;
-  height: 7px;
+  height: 14px;
   border-radius: 999px;
-  background: rgba(232, 244, 242, 0.12);
   overflow: hidden;
-  border: 1px solid rgba(232, 244, 242, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 40%),
+    rgba(3, 16, 22, 0.38);
+  border: 1px solid rgba(62, 207, 176, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.25),
+    0 0 8px rgba(62, 207, 176, 0.18);
 }
 
 .meter-fill {
@@ -640,11 +663,25 @@ body.is-landscape .exit-btn {
 }
 
 .protein-fill {
-  background: linear-gradient(90deg, #3ecfb0, #9be8d6);
+  background:
+    radial-gradient(circle at 80% 50%, rgba(255, 255, 255, 0.55) 0 2px, transparent 3px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 55%),
+    linear-gradient(90deg, #3ecfb0, #9be8d6);
+  box-shadow: 0 0 8px rgba(62, 207, 176, 0.45);
 }
 
 .evolve-fill {
-  background: linear-gradient(90deg, #e8c27a, #7eb6ff);
+  background:
+    repeating-linear-gradient(
+      110deg,
+      transparent 0 4px,
+      rgba(232, 194, 122, 0.45) 4px 5px,
+      transparent 5px 8px,
+      rgba(126, 182, 255, 0.35) 8px 9px
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 55%),
+    linear-gradient(90deg, #e8c27a, #7eb6ff);
+  box-shadow: 0 0 8px rgba(232, 194, 122, 0.3);
 }
 
 .evolve-fill.recover {

@@ -133,19 +133,54 @@ export class Renderer {
       ctx.fill();
     }
 
-    // 景深暗角
-    const vignette = ctx.createRadialGradient(
-      this.w * 0.5,
-      this.h * 0.48,
-      this.h * 0.1,
-      this.w * 0.5,
-      this.h * 0.5,
-      this.h * 0.92
-    );
-    vignette.addColorStop(0, "rgba(0,0,0,0)");
-    vignette.addColorStop(1, "rgba(0,0,0,0.4)");
-    ctx.fillStyle = vignette;
+    // 浅景深：大块失焦菌影
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < 7; i += 1) {
+      const bx = ((i * 347 + this.time * 12 + fx * 0.15) % (this.w + 160)) - 80;
+      const by = ((i * 211 + this.time * 8 + fy * 0.12) % (this.h + 160)) - 80;
+      const br = 28 + (i % 4) * 18;
+      const bg = ctx.createRadialGradient(bx, by, 2, bx, by, br);
+      bg.addColorStop(0, hexToRgba(layer.accent, 0.07));
+      bg.addColorStop(1, hexToRgba(layer.accent, 0));
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** 载玻片圆形暗角 + 边缘 1–2px 色散 */
+  drawSlideVignette() {
+    const ctx = this.ctx;
+    const cx = this.w * 0.5;
+    const cy = this.h * 0.48;
+    const rx = this.w * 0.58;
+    const ry = this.h * 0.5;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, this.w, this.h);
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2, true);
+    ctx.fillStyle = "rgba(3, 16, 22, 0.62)";
+    ctx.fill("evenodd");
+    const g = ctx.createRadialGradient(cx, cy, Math.min(rx, ry) * 0.72, cx, cy, Math.max(rx, ry) * 1.05);
+    g.addColorStop(0, "rgba(3,16,22,0)");
+    g.addColorStop(0.65, "rgba(3,16,22,0.12)");
+    g.addColorStop(1, "rgba(3,16,22,0.55)");
+    ctx.fillStyle = g;
     ctx.fillRect(0, 0, this.w, this.h);
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(224, 90, 106, 0.28)";
+    ctx.lineWidth = 1.4;
+    ctx.ellipse(cx - 1, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(62, 207, 176, 0.32)";
+    ctx.lineWidth = 1.4;
+    ctx.ellipse(cx + 1, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   drawFlagella(ctx, radius, count, pulse, alpha) {
@@ -957,24 +992,6 @@ export class Renderer {
           Math.sin(this.time * 2.2 + (creature.id || 0) * 0.7) * 0.1;
         const bodyAlpha = (creature.kind === "player" ? 0.78 : 0.64) * shimmer;
 
-        if (creature.kind === "player") {
-          const ratio = Math.max(0, Math.min(1, creature.boostCharge ?? 1));
-          const ringR = creature.radius * 1.48;
-          ctx.beginPath();
-          ctx.strokeStyle = hexToRgba("#e8f4f2", 0.1 * shimmer);
-          ctx.lineWidth = 1.5;
-          ctx.arc(0, 0, ringR, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.strokeStyle = hexToRgba(
-            creature.boosting ? "#e8c27a" : creature.boostLocked ? "#6a8a86" : "#3ecfb0",
-            (0.35 + ratio * 0.35) * shimmer
-          );
-          ctx.lineWidth = creature.boosting ? 2.4 : 2;
-          ctx.lineCap = "round";
-          ctx.arc(0, 0, ringR, -Math.PI / 2, -Math.PI / 2 + ratio * Math.PI * 2);
-          ctx.stroke();
-        }
         // 进化过渡：旧形态淡出、新形态淡入，体现成长而非瞬变
         if (creature.kind === "player" && creature.evolutionTween && creature.renderFrom) {
           const mix = creature.morphMix || 0;
@@ -984,6 +1001,37 @@ export class Renderer {
           this.drawMorphBody(to, mix * bodyAlpha, false);
         } else {
           this.drawMorphBody(creature, bodyAlpha, false);
+        }
+        if (creature.kind === "player") {
+          const r = creature.radius;
+          const spec = ctx.createRadialGradient(-r * 0.35, -r * 0.42, 0, 0, 0, r * 1.05);
+          spec.addColorStop(0, "rgba(255,255,255,0.38)");
+          spec.addColorStop(0.28, "rgba(155,232,214,0.12)");
+          spec.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.beginPath();
+          ctx.fillStyle = spec;
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.fill();
+          const ratio = Math.max(0, Math.min(1, creature.boostCharge ?? 1));
+          const ringR = r * 1.82;
+          const wobble = 1 + Math.sin(this.time * 3.2) * 0.03;
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba("#e8f4f2", 0.16 * shimmer);
+          ctx.lineWidth = 2.2;
+          ctx.arc(0, 0, ringR * wobble, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba(
+            creature.boosting ? "#e8c27a" : creature.boostLocked ? "#6a8a86" : "#3ecfb0",
+            (0.5 + ratio * 0.4) * shimmer
+          );
+          ctx.lineWidth = creature.boosting ? 3.2 : 2.6;
+          ctx.lineCap = "round";
+          ctx.shadowColor = creature.boosting ? "#e8c27a" : "#3ecfb0";
+          ctx.shadowBlur = 8;
+          ctx.arc(0, 0, ringR * wobble, -Math.PI / 2, -Math.PI / 2 + ratio * Math.PI * 2);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
         }
         ctx.restore();
 
@@ -1247,6 +1295,7 @@ export class Renderer {
         transitionAccent || level.layer?.accent || "#3ecfb0"
       );
     }
+    this.drawSlideVignette();
     if (z !== 1) this.ctx.restore();
   }
 }
