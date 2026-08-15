@@ -1054,18 +1054,19 @@ export function boostRingRatio(player) {
 export function updatePlayer(player, input, dt) {
   if (player.invuln > 0) player.invuln -= dt;
 
-  const pressed = !!input.boostPressed;
+  const mag = clamp(input.pull ?? Math.hypot(input.dirX, input.dirY), 0, 1);
+  // 指尖只当目标；拉在远处自然耗槽，不另做长按。空格可强制冲。
+  const far = !!input.holding && mag >= 0.55;
+  const wantSprint = far || !!input.boostPressed;
   const regen = 1 / Math.max(0.25, PLAYER.boostRegenTime || 1.85);
   const maxHold = Math.max(0.35, boostDurationFor(player));
   const drain = 1 / maxHold;
 
   if (player.boostLocked) {
-    // 完全耗尽后的回复不可打断
     player.boosting = false;
     player.boostCharge = clamp((player.boostCharge || 0) + regen * dt, 0, 1);
     if (player.boostCharge >= 1) player.boostLocked = false;
-  } else if (pressed && (player.boostCharge || 0) > 0) {
-    // 按住：立即停止回复并消耗；按时长扣进度
+  } else if (wantSprint && (player.boostCharge || 0) > 0) {
     player.boosting = true;
     player.boostCharge -= drain * dt;
     if (player.boostCharge <= 0) {
@@ -1074,7 +1075,6 @@ export function updatePlayer(player, input, dt) {
       player.boostLocked = true;
     }
   } else {
-    // 松手后自动回复（可被再次按下打断）
     player.boosting = false;
     if ((player.boostCharge || 0) < 1) {
       player.boostCharge = clamp((player.boostCharge || 0) + regen * dt, 0, 1);
@@ -1086,11 +1086,10 @@ export function updatePlayer(player, input, dt) {
   const speedMul = player.mods?.speed || 1;
   const turnMul = player.mods?.turn || 1;
   const evolveSlow = player.evolutionTween ? 0.42 : 1;
-  const mag = clamp(input.pull ?? Math.hypot(input.dirX, input.dirY), 0, 1);
   const cruise = PLAYER.baseSpeed * sizeScale * speedMul;
   const sprint = PLAYER.boostSpeed * sizeScale * speedMul;
-  // 拉力映射到常速；拉满并按住才吃加速槽冲到上限
-  const speed = (boosting ? sprint : cruise * mag) * evolveSlow;
+  const speed =
+    (boosting ? cruise + (sprint - cruise) * mag : cruise * mag) * evolveSlow;
 
   if (input.moving) {
     const targetAngle = Math.atan2(input.dirY, input.dirX);
@@ -1102,8 +1101,8 @@ export function updatePlayer(player, input, dt) {
     player.vx = Math.cos(player.angle) * speed;
     player.vy = Math.sin(player.angle) * speed;
   } else {
-    player.vx *= Math.pow(0.04, dt);
-    player.vy *= Math.pow(0.04, dt);
+    player.vx *= Math.pow(0.12, dt);
+    player.vy *= Math.pow(0.12, dt);
   }
 
   player.x += player.vx * dt;

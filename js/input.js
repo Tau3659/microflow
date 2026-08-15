@@ -165,7 +165,7 @@ export class Input {
     this.dirX = dx / dist;
     this.dirY = dy / dist;
     this.pull = Math.min(1, (dist - dead) / (maxPull - dead));
-    this.boostPressed = this._space || this.pull >= 0.92;
+    this.boostPressed = this._space;
   }
 
   show() {}
