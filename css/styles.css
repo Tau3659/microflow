@@ -28,6 +28,8 @@
 html,
 body {
   margin: 0;
+  position: fixed;
+  inset: 0;
   width: 100%;
   height: 100%;
   height: 100dvh;
@@ -39,6 +41,7 @@ body {
   user-select: none;
   -webkit-user-select: none;
   overscroll-behavior: none;
+  overscroll-behavior-x: none;
 }
 
 html:fullscreen,
@@ -51,11 +54,14 @@ body:-webkit-full-screen {
 }
 
 #app {
-  position: relative;
+  position: fixed;
+  inset: 0;
   width: 100%;
   height: 100%;
   height: 100dvh;
   overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 #app:fullscreen,
@@ -71,6 +77,8 @@ body:-webkit-full-screen {
   height: 100%;
   background: var(--bg-deep);
   touch-action: none;
+  overscroll-behavior: none;
+  pointer-events: auto;
 }
 
 .screen {

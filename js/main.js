@@ -263,22 +263,52 @@ volSfx.addEventListener("input", async () => {
   audio.applySettings({ sfxVolume: Number(volSfx.value) / 100 });
 });
 
-document.addEventListener(
-  "touchmove",
-  (e) => {
-    if (!titleScreen.classList.contains("hidden")) return;
+function isUiControl(el) {
+  return !!el?.closest?.(
+    "button, a, input, textarea, .exit-btn, .toggle, .vol-slider, .cta, .settings-gear"
+  );
+}
+
+function lockBrowserGestures(e) {
+  const touches = e.touches || [];
+  if (touches.length > 1) {
     e.preventDefault();
+    return;
+  }
+  const t = touches[0];
+  // 滑边返回 / 前进：把边缘触摸吃掉
+  if (t && (t.clientX < 28 || t.clientX > window.innerWidth - 28)) {
+    if (!isUiControl(e.target)) e.preventDefault();
+    return;
+  }
+  if (e.type === "touchmove" && !isUiControl(e.target)) {
+    e.preventDefault();
+  }
+}
+
+document.addEventListener("touchstart", lockBrowserGestures, { passive: false });
+document.addEventListener("touchmove", lockBrowserGestures, { passive: false });
+document.addEventListener("gesturestart", (e) => e.preventDefault(), { passive: false });
+document.addEventListener("gesturechange", (e) => e.preventDefault(), { passive: false });
+document.addEventListener("gestureend", (e) => e.preventDefault(), { passive: false });
+document.addEventListener(
+  "wheel",
+  (e) => {
+    if (e.ctrlKey) e.preventDefault();
   },
   { passive: false }
 );
 
-document.addEventListener(
-  "gesturestart",
-  (e) => {
-    e.preventDefault();
-  },
-  { passive: false }
-);
+function trapBack() {
+  if (window.history.state?.microflow) return;
+  window.history.pushState({ microflow: 1 }, "");
+}
+trapBack();
+window.addEventListener("popstate", () => {
+  if (titleScreen.classList.contains("hidden")) {
+    trapBack();
+  }
+});
 
 function onViewportChange() {
   syncOrientation();

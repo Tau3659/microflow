@@ -34,8 +34,8 @@ export class Input {
 
     const onDown = (e) => {
       if (e.target?.closest?.("button, a, input, textarea, .exit-btn")) return;
-      if (this._pointerId != null && e.pointerId !== this._pointerId) return;
       e.preventDefault();
+      if (this._pointerId != null && e.pointerId !== this._pointerId) return;
       this._pointerId = e.pointerId;
       this.holding = true;
       this._clientX = e.clientX;
@@ -79,13 +79,14 @@ export class Input {
       },
       { passive: false }
     );
-    el.addEventListener(
-      "touchstart",
-      (e) => {
-        if (e.touches.length > 1) e.preventDefault();
-      },
-      { passive: false }
-    );
+    const killPinch = (e) => {
+      if (e.touches && e.touches.length > 1) e.preventDefault();
+    };
+    el.addEventListener("touchstart", killPinch, { passive: false });
+    el.addEventListener("touchmove", killPinch, { passive: false });
+    window.addEventListener("gesturestart", (e) => e.preventDefault(), { passive: false });
+    window.addEventListener("gesturechange", (e) => e.preventDefault(), { passive: false });
+    window.addEventListener("gestureend", (e) => e.preventDefault(), { passive: false });
 
     window.addEventListener("keydown", (e) => {
       if (e.code === "ArrowUp" || e.code === "KeyW") this._keyY = -1;
