@@ -80,15 +80,12 @@ export class Renderer {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
-  /** 双层背景：远处下一层 + 近处当前层；内容逆玩家方向飘动 */
-  drawLayeredBackground(level, camera, flow) {
+  /** 水色底，视差粒子在镜圈里另画 */
+  drawLayeredBackground(level) {
     const ctx = this.ctx;
     const layer = level.layer;
     const next = level.nextLayer;
-    const fx = flow?.x || 0;
-    const fy = flow?.y || 0;
 
-    // 底层：下一层色调（更深）
     const deep = ctx.createLinearGradient(0, 0, 0, this.h);
     if (next) {
       deep.addColorStop(0, next.bgBottom);
@@ -101,73 +98,80 @@ export class Renderer {
     ctx.fillStyle = deep;
     ctx.fillRect(0, 0, this.w, this.h);
 
-    // 下一层雾团（慢视差 + 轻微逆向相对运动）
-    if (level.deepField && next) {
-      const deepCam = camOf(camera, PARALLAX.deep);
-      ctx.save();
-      ctx.globalAlpha = 0.22;
-      for (const b of level.deepField.blobs) {
-        const x = b.x - deepCam.x + fx * 0.22;
-        const y = b.y - deepCam.y + fy * 0.22;
-        if (x < -150 || y < -150 || x > this.w + 150 || y > this.h + 150) continue;
-        const pulse = 1 + Math.sin(this.time * 0.7 + b.phase) * 0.08;
-        const g = ctx.createRadialGradient(x, y, 2, x, y, b.r * pulse);
-        g.addColorStop(0, hexToRgba(next.accent, 0.35));
-        g.addColorStop(1, hexToRgba(next.bgTop, 0));
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(x, y, b.r * pulse, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-
-      const moteCam = camOf(camera, PARALLAX.deep * 1.15);
-      for (const m of level.deepField.motes) {
-        const x = m.x - moteCam.x + fx * 0.35;
-        const y = m.y - moteCam.y + fy * 0.35;
-        if (x < -10 || y < -10 || x > this.w + 10 || y > this.h + 10) continue;
-        ctx.fillStyle = hexToRgba(m.color, 0.18 + Math.sin(this.time + m.phase) * 0.06);
-        ctx.beginPath();
-        ctx.arc(x, y, m.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    // 当前层渐变罩
     const near = ctx.createLinearGradient(0, 0, 0, this.h);
     near.addColorStop(0, hexToRgba(layer.bgTop, 0.42));
     near.addColorStop(0.45, hexToRgba(layer.bgTop, 0.12));
     near.addColorStop(1, hexToRgba(layer.bgBottom, 0.55));
     ctx.fillStyle = near;
     ctx.fillRect(0, 0, this.w, this.h);
+  }
 
-    // 当前层微粒：轻微逆向飘动，体现相对运动即可
-    const midCam = camOf(camera, PARALLAX.mid);
-    for (let i = 0; i < 40; i += 1) {
-      const speed = 0.28 + (i % 5) * 0.08;
-      let px = i * 211 + midCam.x * 0.35 + fx * speed;
-      let py = i * 127 + midCam.y * 0.35 + fy * speed + Math.sin(this.time * 0.4 + i) * 6;
-      px = ((px % (this.w + 50)) + (this.w + 50)) % (this.w + 50) - 25;
-      py = ((py % (this.h + 50)) + (this.h + 50)) % (this.h + 50) - 25;
-      ctx.fillStyle = hexToRgba(layer.protein, 0.1 + (i % 4) * 0.025);
-      ctx.beginPath();
-      ctx.arc(px, py, 1 + (i % 3) * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+  _wrapShift(seed, shift, span, pad) {
+    const v = seed - shift;
+    return ((v % span) + span) % span - pad;
+  }
 
-    // 浅景深：大块失焦菌影
+  /**
+   * 镜圈内双层视差：慢光斑/远菌影 0.25，近碎屑 0.55，位移与游动相反。
+   * 圈外仍由载玻片实黑盖住。密度宁稀。
+   */
+  drawMotionParallax(level, camera, zoom = 1) {
+    const ctx = this.ctx;
+    const layer = level.layer;
+    const { cx, cy, r } = this.slideMetrics();
+    if (r < 8) return;
+    const clipR = r / Math.max(0.01, zoom || 1);
+    const accent = layer.accent || "#3ecfb0";
+    const protein = layer.protein || "#9be8d6";
+    const slowK = PARALLAX.slow;
+    const fastK = PARALLAX.fast;
+
     ctx.save();
-    ctx.globalCompositeOperation = "lighter";
+    ctx.beginPath();
+    ctx.arc(cx, cy, clipR, 0, Math.PI * 2);
+    ctx.clip();
+
+    const spanSX = this.w + 240;
+    const spanSY = this.h + 240;
     for (let i = 0; i < 7; i += 1) {
-      const bx = ((i * 347 + this.time * 12 + fx * 0.15) % (this.w + 160)) - 80;
-      const by = ((i * 211 + this.time * 8 + fy * 0.12) % (this.h + 160)) - 80;
-      const br = 28 + (i % 4) * 18;
-      const bg = ctx.createRadialGradient(bx, by, 2, bx, by, br);
-      bg.addColorStop(0, hexToRgba(layer.accent, 0.07));
-      bg.addColorStop(1, hexToRgba(layer.accent, 0));
-      ctx.fillStyle = bg;
+      const bx = this._wrapShift(i * 367 + 40, camera.x * slowK, spanSX, 120);
+      const by = this._wrapShift(i * 271 + 80, camera.y * slowK, spanSY, 120);
+      const br = 42 + (i % 4) * 12;
+      const g = ctx.createRadialGradient(bx, by, 4, bx, by, br);
+      g.addColorStop(0, hexToRgba(accent, 0.14));
+      g.addColorStop(0.45, hexToRgba(accent, 0.05));
+      g.addColorStop(1, hexToRgba(accent, 0));
+      ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(bx, by, br, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (let i = 0; i < 4; i += 1) {
+      const bx = this._wrapShift(i * 419 + 180, camera.x * slowK, spanSX, 120);
+      const by = this._wrapShift(i * 307 + 90, camera.y * slowK, spanSY, 120);
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.rotate(i * 0.9);
+      ctx.fillStyle = hexToRgba(accent, 0.08);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 38 + i * 6, 14 + i * 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    const spanFX = this.w + 90;
+    const spanFY = this.h + 90;
+    for (let i = 0; i < 16; i += 1) {
+      const px = this._wrapShift(i * 193 + 20, camera.x * fastK, spanFX, 45);
+      const py = this._wrapShift(i * 157 + 30, camera.y * fastK, spanFY, 45);
+      const bright = 0.32 + (i % 4) * 0.07;
+      ctx.fillStyle = hexToRgba(i % 3 === 0 ? protein : "#e8f4f2", bright);
+      ctx.beginPath();
+      if (i % 4 === 0) {
+        ctx.ellipse(px, py, 2.4, 1.1, i * 0.6, 0, Math.PI * 2);
+      } else {
+        ctx.arc(px, py, 1.3 + (i % 3) * 0.55, 0, Math.PI * 2);
+      }
       ctx.fill();
     }
     ctx.restore();
@@ -1306,12 +1310,9 @@ export class Renderer {
     }
 
     const flow = this.counterFlow;
-    const deepCam = {
-      x: camera.x * PARALLAX.deep,
-      y: camera.y * PARALLAX.deep,
-    };
 
-    this.drawLayeredBackground(level, deepCam, flow);
+    this.drawLayeredBackground(level);
+    this.drawMotionParallax(level, camera, z);
     this.drawGhosts(level.ghosts, camera, world, flow);
     this.drawPortal(level.portal, camera, portalOpen, world);
     if (level.exitPortal) {

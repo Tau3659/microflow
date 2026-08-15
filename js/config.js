@@ -603,9 +603,11 @@ export const WARNING = {
 
 /** 视差：下一层更慢，相对位移体现速度感 */
 export const PARALLAX = {
-  deep: 0.22,
+  slow: 0.25,
+  fast: 0.55,
+  deep: 0.25,
   ghost: 0.42,
-  mid: 0.68,
+  mid: 0.55,
   current: 1,
 };
 
