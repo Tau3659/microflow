@@ -1119,10 +1119,10 @@ export function updatePlayer(player, input, dt) {
     player.vx += (tx - player.vx) * k;
     player.vy += (ty - player.vy) * k;
   } else {
-    const damp = Math.exp(-(PLAYER.coast || 1.55) * dt);
+    const damp = Math.exp(-(PLAYER.coast || 4.6) * dt);
     player.vx *= damp;
     player.vy *= damp;
-    if (Math.hypot(player.vx, player.vy) < 5) {
+    if (Math.hypot(player.vx, player.vy) < 8) {
       player.vx = 0;
       player.vy = 0;
     }
