@@ -139,8 +139,9 @@ export class Game {
       leadX = (leadX / leadLen) * leadMax;
       leadY = (leadY / leadLen) * leadMax;
     }
-    const targetX = player.x - this.renderer.w * 0.5 + leadX;
-    const targetY = player.y - this.renderer.h * 0.48 + leadY;
+    const slide = this.renderer.slideMetrics();
+    const targetX = player.x - slide.cx + leadX;
+    const targetY = player.y - slide.cy + leadY;
     const k = hard ? 1 : 0.12;
     this.camera.x += (targetX - this.camera.x) * k;
     this.camera.y += (targetY - this.camera.y) * k;
@@ -194,7 +195,7 @@ export class Game {
       this._portalOpen(),
       trAlpha,
       tr?.accent || null,
-      1
+      this.renderer.viewZoom || 1.3
     );
     this.raf = requestAnimationFrame((t) => this._loop(t));
   }
@@ -206,7 +207,7 @@ export class Game {
     const level = this.level;
     const player = level.player;
 
-    this.input.refresh(player, this.camera, this.renderer.w, this.renderer.h);
+    this.input.refresh();
     updatePlayer(player, this.input, dt);
     if (player.evolutionTween) updateEvolution(player, dt);
     const wrap = wrapEntity(player, level.world);

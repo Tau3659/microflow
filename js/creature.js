@@ -1055,7 +1055,7 @@ export function updatePlayer(player, input, dt) {
   if (player.invuln > 0) player.invuln -= dt;
 
   const mag = clamp(input.pull ?? Math.hypot(input.dirX, input.dirY), 0, 1);
-  // 距离只变速不耗槽；加速由右侧技能键 / 空格按住释放
+  // 摇杆幅度只变速不耗槽；加速由右侧技能键 / 空格按住释放
   const wantSprint = !!input.boostPressed;
   const regen = 1 / Math.max(0.25, PLAYER.boostRegenTime || 1.85);
   const maxHold = Math.max(0.35, boostDurationFor(player));

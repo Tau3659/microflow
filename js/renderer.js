@@ -45,6 +45,21 @@ export class Renderer {
     this.time = 0;
     /** 与玩家前进相反的背景飘移，强化速度感 */
     this.counterFlow = { x: 0, y: 0 };
+    /** 相对当前画面拉近，圈里菌体更大 */
+    this.viewZoom = 1.3;
+  }
+
+  /** 镜圈：竖屏左右窄黑边，底拇指区不压控件 */
+  slideMetrics() {
+    const w = this.w;
+    const h = this.h;
+    const topBar = 52;
+    const thumbZone = h > w ? h * 0.33 : 108;
+    const playH = Math.max(80, h - topBar - thumbZone);
+    const cx = w * 0.5;
+    const cy = topBar + playH * 0.5;
+    const r = Math.min(w * 0.5 - 8, playH * 0.5);
+    return { cx, cy, r, topBar, thumbZone, playH };
   }
 
   resize() {
@@ -154,9 +169,7 @@ export class Renderer {
   /** 载玻片镜圈：圈外实黑、厚玻璃沿、红青色散 */
   drawSlideVignette() {
     const ctx = this.ctx;
-    const cx = this.w * 0.5;
-    const cy = this.h * 0.48;
-    const r = Math.min(this.w, this.h) * 0.46;
+    const { cx, cy, r } = this.slideMetrics();
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, this.w, this.h);
@@ -1265,11 +1278,12 @@ export class Renderer {
     const p = level.player;
     const world = level.world;
     const z = zoom || 1;
+    const slide = this.slideMetrics();
     if (z !== 1) {
       this.ctx.save();
-      this.ctx.translate(this.w * 0.5, this.h * 0.5);
+      this.ctx.translate(slide.cx, slide.cy);
       this.ctx.scale(z, z);
-      this.ctx.translate(-this.w * 0.5, -this.h * 0.5);
+      this.ctx.translate(-slide.cx, -slide.cy);
     }
 
     // 背景轻微逆向相对运动（不宜晃动过猛）
@@ -1312,7 +1326,7 @@ export class Renderer {
         transitionAccent || level.layer?.accent || "#3ecfb0"
       );
     }
-    this.drawSlideVignette();
     if (z !== 1) this.ctx.restore();
+    this.drawSlideVignette();
   }
 }

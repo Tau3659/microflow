@@ -279,7 +279,7 @@ volSfx.addEventListener("input", async () => {
 
 function isUiControl(el) {
   return !!el?.closest?.(
-    "button, a, input, textarea, .exit-btn, .boost-skill, #btn-boost, .toggle, .vol-slider, .cta, .settings-gear"
+    "button, a, input, textarea, .exit-btn, .boost-skill, #btn-boost, .virtual-pad, #virtual-pad, .virtual-knob, #controls, .toggle, .vol-slider, .cta, .settings-gear"
   );
 }
 

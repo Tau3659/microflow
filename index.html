@@ -73,12 +73,18 @@
       </button>
     </section>
 
-    <button id="btn-boost" class="boost-skill hidden" type="button" aria-label="加速">
-      <svg class="boost-ring" viewBox="0 0 72 72" aria-hidden="true">
-        <circle class="boost-ring-track" cx="36" cy="36" r="28" />
-        <circle id="boost-ring-fill" class="boost-ring-fill" cx="36" cy="36" r="28" />
-      </svg>
-    </button>
+    <div id="controls" class="controls hidden">
+      <div id="virtual-pad" class="virtual-pad" aria-label="移动">
+        <div class="pad-cross" aria-hidden="true"></div>
+        <div id="virtual-knob" class="virtual-knob"></div>
+      </div>
+      <button id="btn-boost" class="boost-skill" type="button" aria-label="加速">
+        <svg class="boost-ring" viewBox="0 0 72 72" aria-hidden="true">
+          <circle class="boost-ring-track" cx="36" cy="36" r="28" />
+          <circle id="boost-ring-fill" class="boost-ring-fill" cx="36" cy="36" r="28" />
+        </svg>
+      </button>
+    </div>
 
     <section id="overlay" class="screen overlay hidden">
       <div class="overlay-card">

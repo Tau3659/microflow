@@ -758,14 +758,15 @@ body.is-landscape .exit-btn {
   50% { transform: scale(1.35); opacity: 0.7; }
 }
 
-/* 虚拟按键已去掉：单指跟随，底栏留给拇指 */
+/* 底拇指区：左摇杆右加速，镜圈不压这块 */
 .controls {
-  display: none !important;
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   top: auto;
+  height: 33%;
+  min-height: 120px;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -778,6 +779,10 @@ body.is-landscape .exit-btn {
   pointer-events: none;
   z-index: 4;
   transition: inset 0.28s ease, padding 0.28s ease;
+}
+body.is-landscape .controls {
+  height: 120px;
+  max-height: 36%;
 }
 
 .hud,
@@ -1186,11 +1191,13 @@ body.is-portrait .exit-btn {
 }
 
 .boost-skill {
-  position: absolute;
-  right: calc(14px + var(--safe-right));
-  bottom: calc(16% + var(--safe-bottom));
+  position: relative;
+  right: auto;
+  bottom: auto;
   width: 72px;
   height: 72px;
+  margin: 0 0 8px;
+  flex-shrink: 0;
   z-index: 5;
   padding: 0;
   border: 2.5px solid rgba(62, 207, 176, 0.55);
@@ -1239,7 +1246,7 @@ body.is-portrait .exit-btn {
 .boost-skill.active .boost-ring-fill { stroke: #e8c27a; }
 .boost-skill.locked .boost-ring-fill { stroke: #6a8a86; }
 body.is-portrait .boost-skill {
-  bottom: calc(14% + var(--safe-bottom));
   width: 76px;
   height: 76px;
+  margin-bottom: 12px;
 }
