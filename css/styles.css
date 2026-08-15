@@ -1206,18 +1206,6 @@ body.is-portrait .exit-btn {
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-.boost-skill::after {
-  content: "";
-  position: absolute;
-  left: 54%;
-  top: 50%;
-  width: 11px;
-  height: 11px;
-  border-right: 2px solid rgba(232, 244, 242, 0.9);
-  border-top: 2px solid rgba(232, 244, 242, 0.9);
-  transform: translate(-50%, -50%) rotate(45deg);
-  pointer-events: none;
-}
 .boost-skill.hidden { display: none; }
 .boost-skill.active {
   border-color: rgba(232, 194, 122, 0.85);
