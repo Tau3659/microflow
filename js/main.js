@@ -14,6 +14,9 @@ const btnStart = document.getElementById("btn-start");
 const btnRetry = document.getElementById("btn-retry");
 const btnHome = document.getElementById("btn-home");
 const btnExit = document.getElementById("btn-exit");
+const btnBoost = document.getElementById("btn-boost");
+const boostRingFill = document.getElementById("boost-ring-fill");
+const BOOST_RING_C = 2 * Math.PI * 28;
 const hudFloor = document.getElementById("hud-floor");
 const meterProtein = document.getElementById("meter-protein");
 const proteinFill = document.getElementById("protein-fill");
@@ -44,6 +47,9 @@ const hud = {
     recovering = false,
     recoverRatio = 0,
     proteinsExhausted = false,
+    boostRatio = 1,
+    boosting = false,
+    boostLocked = false,
   } = {}) {
     if (hudFloor && layerDisplay != null) {
       hudFloor.textContent = String(layerDisplay);
@@ -64,6 +70,13 @@ const hud = {
         dnaIcon?.classList.toggle("portal", !!canEvolve);
       }
     }
+    if (boostRingFill) {
+      const r = Math.max(0, Math.min(1, boostRatio));
+      boostRingFill.style.strokeDasharray = String(BOOST_RING_C);
+      boostRingFill.style.strokeDashoffset = String(BOOST_RING_C * (1 - r));
+    }
+    btnBoost?.classList.toggle("locked", !!boostLocked);
+    btnBoost?.classList.toggle("active", !!boosting && !boostLocked);
     if (hudNuclei) {
       const html = nuclei
         .map((on) => `<span class="${on ? "on" : "off"}"></span>`)
@@ -94,6 +107,7 @@ const overlay = {
 
 const game = new Game({ canvas, hud, overlay });
 game.init();
+game.input.bindBoost(btnBoost);
 
 function syncSettingsUi() {
   const s = audio.getSettings();
@@ -180,7 +194,7 @@ function syncOrientation() {
   const portrait = isPortrait();
   document.body.classList.toggle("is-portrait", portrait);
   document.body.classList.toggle("is-landscape", !portrait);
-  game.input.hide();
+  game.input.dropPointer();
 }
 
 function returnToTitle() {
@@ -265,11 +279,13 @@ volSfx.addEventListener("input", async () => {
 
 function isUiControl(el) {
   return !!el?.closest?.(
-    "button, a, input, textarea, .exit-btn, .toggle, .vol-slider, .cta, .settings-gear"
+    "button, a, input, textarea, .exit-btn, .boost-skill, #btn-boost, .toggle, .vol-slider, .cta, .settings-gear"
   );
 }
 
 function lockBrowserGestures(e) {
+  // 加速键上的那根指不要被当成捏合/滑边吃掉
+  if (isUiControl(e.target)) return;
   const touches = e.touches || [];
   if (touches.length > 1) {
     e.preventDefault();

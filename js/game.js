@@ -174,6 +174,9 @@ export class Game {
       recovering: missing > 0,
       recoverRatio: missing > 0 ? (player.recoverProgress || 0) / recoverNeed : 0,
       proteinsExhausted: !!this.level.proteinsExhausted,
+      boostRatio: player.boostCharge ?? 1,
+      boosting: !!player.boosting,
+      boostLocked: !!player.boostLocked,
     });
   }
 

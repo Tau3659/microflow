@@ -1,7 +1,8 @@
 /**
  * 单指点哪游哪（flOw 手感，手机主场景）
- * 离菌越远越快；拉到最远并按住消耗加速槽。
- * 不跟踪第二指，避免和捏合冲突。无虚拟摇杆、无屏幕加速键。
+ * 离菌越远越快，距离只变速不耗槽。
+ * 加速：右侧技能键 / 空格 按住释放。按下不改瞄准。
+ * 不跟踪第二指，避免和捏合冲突。
  */
 export class Input {
   constructor(canvas) {
@@ -21,6 +22,9 @@ export class Input {
     this._keyX = 0;
     this._keyY = 0;
     this._bound = false;
+    this._boostHeld = false;
+    this._boostPointer = null;
+    this.boostBtn = null;
   }
 
   get moving() {
@@ -33,7 +37,7 @@ export class Input {
     const el = this.canvas;
 
     const onDown = (e) => {
-      if (e.target?.closest?.("button, a, input, textarea, .exit-btn")) return;
+      if (e.target?.closest?.("button, a, input, textarea, .exit-btn, .boost-skill, #btn-boost")) return;
       e.preventDefault();
       if (this._pointerId != null && e.pointerId !== this._pointerId) return;
       this._pointerId = e.pointerId;
@@ -118,6 +122,35 @@ export class Input {
     }
   }
 
+  bindBoost(btn) {
+    this.boostBtn = btn;
+    if (!btn) return;
+    const down = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._boostPointer = e.pointerId;
+      this._boostHeld = true;
+      this.boostPressed = true;
+      btn.classList.add("active");
+      try {
+        btn.setPointerCapture?.(e.pointerId);
+      } catch {
+        // ignore
+      }
+    };
+    const up = (e) => {
+      if (this._boostPointer != null && e.pointerId !== this._boostPointer) return;
+      this._boostPointer = null;
+      this._boostHeld = false;
+      this.boostPressed = this._space;
+      btn.classList.remove("active");
+    };
+    btn.addEventListener("pointerdown", down, { passive: false });
+    btn.addEventListener("pointerup", up);
+    btn.addEventListener("pointercancel", up);
+    btn.addEventListener("lostpointercapture", up);
+  }
+
   /**
    * 每帧把指针屏幕坐标换成相对菌体的方向和拉力。
    * 菌体游走时目标点钉在手指上，靠近就减速。
@@ -137,7 +170,7 @@ export class Input {
         this.aimX = 0;
         this.aimY = 0;
       }
-      this.boostPressed = this._space;
+      this.boostPressed = this._space || this._boostHeld;
       return;
     }
 
@@ -159,18 +192,21 @@ export class Input {
       this.dirX = 0;
       this.dirY = 0;
       this.pull = 0;
-      this.boostPressed = this._space;
+      this.boostPressed = this._space || this._boostHeld;
       return;
     }
     this.dirX = dx / dist;
     this.dirY = dy / dist;
     this.pull = Math.min(1, (dist - dead) / (maxPull - dead));
-    this.boostPressed = this._space;
+    this.boostPressed = this._space || this._boostHeld;
   }
 
-  show() {}
+  show() {
+    this.boostBtn?.classList.remove("hidden");
+  }
 
-  hide() {
+  /** 旋转/失焦时丢掉移动指，不把加速键藏掉 */
+  dropPointer() {
     this._pointerId = null;
     this.holding = false;
     this.dirX = 0;
@@ -178,7 +214,16 @@ export class Input {
     this.pull = 0;
     this.aimX = 0;
     this.aimY = 0;
-    this.boostPressed = false;
+    this.boostPressed = this._space || this._boostHeld;
+  }
+
+  hide() {
+    this.dropPointer();
     this._space = false;
+    this._boostHeld = false;
+    this._boostPointer = null;
+    this.boostPressed = false;
+    this.boostBtn?.classList.add("hidden");
+    this.boostBtn?.classList.remove("active");
   }
 }

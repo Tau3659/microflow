@@ -1055,9 +1055,8 @@ export function updatePlayer(player, input, dt) {
   if (player.invuln > 0) player.invuln -= dt;
 
   const mag = clamp(input.pull ?? Math.hypot(input.dirX, input.dirY), 0, 1);
-  // 指尖只当目标；拉在远处自然耗槽，不另做长按。空格可强制冲。
-  const far = !!input.holding && mag >= 0.55;
-  const wantSprint = far || !!input.boostPressed;
+  // 距离只变速不耗槽；加速由右侧技能键 / 空格按住释放
+  const wantSprint = !!input.boostPressed;
   const regen = 1 / Math.max(0.25, PLAYER.boostRegenTime || 1.85);
   const maxHold = Math.max(0.35, boostDurationFor(player));
   const drain = 1 / maxHold;
@@ -1088,8 +1087,7 @@ export function updatePlayer(player, input, dt) {
   const evolveSlow = player.evolutionTween ? 0.42 : 1;
   const cruise = PLAYER.baseSpeed * sizeScale * speedMul;
   const sprint = PLAYER.boostSpeed * sizeScale * speedMul;
-  const speed =
-    (boosting ? cruise + (sprint - cruise) * mag : cruise * mag) * evolveSlow;
+  const speed = (boosting ? sprint : cruise * mag) * evolveSlow;
 
   if (input.moving) {
     const targetAngle = Math.atan2(input.dirY, input.dirX);
@@ -1098,6 +1096,9 @@ export function updatePlayer(player, input, dt) {
     while (delta < -Math.PI) delta += Math.PI * 2;
     player.angle += delta * clamp(PLAYER.turnRate * turnMul * dt, 0, 1);
 
+    player.vx = Math.cos(player.angle) * speed;
+    player.vy = Math.sin(player.angle) * speed;
+  } else if (boosting) {
     player.vx = Math.cos(player.angle) * speed;
     player.vy = Math.sin(player.angle) * speed;
   } else {
