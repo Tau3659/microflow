@@ -104,12 +104,13 @@ function makeNuclei(count, radius, morph = MORPH.COCCUS) {
   const baseR = radius * PLAYER.nucleusRadiusFactor * (count <= 1 ? 1 : count <= 2 ? 0.92 : count <= 4 ? 0.82 : 0.74);
   // 核间距拉开，避免一张嘴扫到多个
   const minSep = Math.max(baseR * 2.35, radius * (count <= 2 ? 0.7 : count <= 3 ? 0.58 : 0.48));
-  const maxR = radius * 0.86;
+  // 圆心+核半径必须落在膜内
+  const maxR = Math.max(2, radius * 0.9 - baseR);
   const points = [];
 
   if (count <= 1) {
     const a = Math.random() * Math.PI * 2;
-    const dist = radius * (0.48 + Math.random() * 0.32);
+    const dist = Math.min(maxR, radius * (0.28 + Math.random() * 0.22));
     return [
       {
         ox: Math.cos(a) * dist,
@@ -174,7 +175,19 @@ function makeNuclei(count, radius, morph = MORPH.COCCUS) {
     p.oy = c.oy;
   }
 
-  return points.map((p) => ({ ox: p.ox, oy: p.oy, alive: true, r: baseR }));
+  const nuclei = points.map((p) => ({ ox: p.ox, oy: p.oy, alive: true, r: baseR }));
+  return fitNucleiInBody(nuclei, radius);
+}
+
+function fitNucleiInBody(nuclei, radius) {
+  const rim = radius * 0.9;
+  for (const n of nuclei || []) {
+    const maxD = Math.max(2, rim - (n.r || 0));
+    const c = clampInBody(n.ox, n.oy, maxD);
+    n.ox = c.ox;
+    n.oy = c.oy;
+  }
+  return nuclei;
 }
 
 /**
@@ -532,6 +545,7 @@ export function updateEvolution(player, dt) {
       tw.baseNuclei.push({ ox: next.ox, oy: next.oy, alive: true });
     }
   }
+  fitNucleiInBody(player.nuclei, player.radius);
 
   while (player.segments.length < tw.targetSegments) {
     const last = player.segments[player.segments.length - 1];
@@ -1095,15 +1109,23 @@ export function updatePlayer(player, input, dt) {
     while (delta > Math.PI) delta -= Math.PI * 2;
     while (delta < -Math.PI) delta += Math.PI * 2;
     player.angle += delta * clamp(PLAYER.turnRate * turnMul * dt, 0, 1);
+  }
 
-    player.vx = Math.cos(player.angle) * speed;
-    player.vy = Math.sin(player.angle) * speed;
-  } else if (boosting) {
-    player.vx = Math.cos(player.angle) * speed;
-    player.vy = Math.sin(player.angle) * speed;
+  const wantMove = input.moving || boosting;
+  if (wantMove) {
+    const tx = Math.cos(player.angle) * speed;
+    const ty = Math.sin(player.angle) * speed;
+    const k = 1 - Math.exp(-(PLAYER.accel || 7.2) * dt);
+    player.vx += (tx - player.vx) * k;
+    player.vy += (ty - player.vy) * k;
   } else {
-    player.vx *= Math.pow(0.12, dt);
-    player.vy *= Math.pow(0.12, dt);
+    const damp = Math.exp(-(PLAYER.coast || 1.55) * dt);
+    player.vx *= damp;
+    player.vy *= damp;
+    if (Math.hypot(player.vx, player.vy) < 5) {
+      player.vx = 0;
+      player.vy = 0;
+    }
   }
 
   player.x += player.vx * dt;

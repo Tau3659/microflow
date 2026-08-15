@@ -45,8 +45,8 @@ export class Renderer {
     this.time = 0;
     /** 与玩家前进相反的背景飘移，强化速度感 */
     this.counterFlow = { x: 0, y: 0 };
-    /** 相对当前画面拉近，圈里菌体更大 */
-    this.viewZoom = 1.3;
+    /** 相对 1.3 再扩大视野 40%（1.3/1.4） */
+    this.viewZoom = 1.3 / 1.4;
   }
 
   /** 镜圈：竖屏左右窄黑边，底拇指区不压控件 */
@@ -125,6 +125,8 @@ export class Renderer {
     const protein = layer.protein || "#9be8d6";
     const slowK = PARALLAX.slow;
     const fastK = PARALLAX.fast;
+    const srcX = level.player?.x ?? camera.x;
+    const srcY = level.player?.y ?? camera.y;
 
     ctx.save();
     ctx.beginPath();
@@ -134,8 +136,8 @@ export class Renderer {
     const spanSX = this.w + 240;
     const spanSY = this.h + 240;
     for (let i = 0; i < 7; i += 1) {
-      const bx = this._wrapShift(i * 367 + 40, camera.x * slowK, spanSX, 120);
-      const by = this._wrapShift(i * 271 + 80, camera.y * slowK, spanSY, 120);
+      const bx = this._wrapShift(i * 367 + 40, srcX * slowK, spanSX, 120);
+      const by = this._wrapShift(i * 271 + 80, srcY * slowK, spanSY, 120);
       const br = 42 + (i % 4) * 12;
       const g = ctx.createRadialGradient(bx, by, 4, bx, by, br);
       g.addColorStop(0, hexToRgba(accent, 0.14));
@@ -147,8 +149,8 @@ export class Renderer {
       ctx.fill();
     }
     for (let i = 0; i < 4; i += 1) {
-      const bx = this._wrapShift(i * 419 + 180, camera.x * slowK, spanSX, 120);
-      const by = this._wrapShift(i * 307 + 90, camera.y * slowK, spanSY, 120);
+      const bx = this._wrapShift(i * 419 + 180, srcX * slowK, spanSX, 120);
+      const by = this._wrapShift(i * 307 + 90, srcY * slowK, spanSY, 120);
       ctx.save();
       ctx.translate(bx, by);
       ctx.rotate(i * 0.9);
@@ -159,18 +161,18 @@ export class Renderer {
       ctx.restore();
     }
 
-    const spanFX = this.w + 90;
-    const spanFY = this.h + 90;
-    for (let i = 0; i < 16; i += 1) {
-      const px = this._wrapShift(i * 193 + 20, camera.x * fastK, spanFX, 45);
-      const py = this._wrapShift(i * 157 + 30, camera.y * fastK, spanFY, 45);
-      const bright = 0.32 + (i % 4) * 0.07;
+    const spanFX = this.w + 70;
+    const spanFY = this.h + 70;
+    for (let i = 0; i < 28; i += 1) {
+      const px = this._wrapShift(i * 173 + 20, srcX * fastK, spanFX, 35);
+      const py = this._wrapShift(i * 149 + 30, srcY * fastK, spanFY, 35);
+      const bright = 0.48 + (i % 4) * 0.08;
       ctx.fillStyle = hexToRgba(i % 3 === 0 ? protein : "#e8f4f2", bright);
       ctx.beginPath();
       if (i % 4 === 0) {
-        ctx.ellipse(px, py, 2.4, 1.1, i * 0.6, 0, Math.PI * 2);
+        ctx.ellipse(px, py, 2.8, 1.2, i * 0.6, 0, Math.PI * 2);
       } else {
-        ctx.arc(px, py, 1.3 + (i % 3) * 0.55, 0, Math.PI * 2);
+        ctx.arc(px, py, 1.7 + (i % 3) * 0.55, 0, Math.PI * 2);
       }
       ctx.fill();
     }

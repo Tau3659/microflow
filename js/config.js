@@ -630,6 +630,10 @@ export const PLAYER = {
   boostDurationPerEvo: 0.28,
   /** 加速能量从空回复满所需秒数 */
   boostRegenTime: 1.85,
+  /** 朝目标速度靠近（1/s），移动时的阻尼 */
+  accel: 7.2,
+  /** 松手后速度衰减（1/s），停止惯性 */
+  coast: 1.55,
   turnRate: 9,
   segmentSpacing: 11,
   /** 体型越大移动越慢：相对此参考半径缩放速度 */
