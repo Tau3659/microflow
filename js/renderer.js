@@ -1049,26 +1049,6 @@ export class Renderer {
           ctx.fillStyle = spec;
           ctx.arc(0, 0, r, 0, Math.PI * 2);
           ctx.fill();
-          const ratio = Math.max(0, Math.min(1, creature.boostCharge ?? 1));
-          const ringR = r * 1.82;
-          const wobble = 1 + Math.sin(this.time * 3.2) * 0.03;
-          ctx.beginPath();
-          ctx.strokeStyle = hexToRgba("#e8f4f2", 0.16 * shimmer);
-          ctx.lineWidth = 2.2;
-          ctx.arc(0, 0, ringR * wobble, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.strokeStyle = hexToRgba(
-            creature.boosting ? "#e8c27a" : creature.boostLocked ? "#6a8a86" : "#3ecfb0",
-            (0.5 + ratio * 0.4) * shimmer
-          );
-          ctx.lineWidth = creature.boosting ? 3.2 : 2.6;
-          ctx.lineCap = "round";
-          ctx.shadowColor = creature.boosting ? "#e8c27a" : "#3ecfb0";
-          ctx.shadowBlur = 8;
-          ctx.arc(0, 0, ringR * wobble, -Math.PI / 2, -Math.PI / 2 + ratio * Math.PI * 2);
-          ctx.stroke();
-          ctx.shadowBlur = 0;
         }
         ctx.restore();
 
