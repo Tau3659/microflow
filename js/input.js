@@ -3,6 +3,9 @@
  * 摇杆直径 128、满行程 34%、死区 0.12；松手停。力度只变速不耗槽。
  * 加速右下 84，和空格同一套，可与摇杆两指同时按。
  */
+const PAD_TRAVEL = 0.34;
+const PAD_DEADZONE = 0.12;
+
 export class Input {
   constructor(canvas) {
     this.canvas = canvas;
@@ -114,10 +117,10 @@ export class Input {
     const py = rect.top + rect.height / 2;
     let dx = clientX - px;
     let dy = clientY - py;
-    const max = rect.width * 0.34;
+    const max = rect.width * PAD_TRAVEL;
     const len = Math.hypot(dx, dy) || 1;
     const raw = Math.min(1, len / max);
-    const dead = 0.12;
+    const dead = PAD_DEADZONE;
     if (raw <= dead) {
       this.dirX = 0;
       this.dirY = 0;
