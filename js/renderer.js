@@ -54,7 +54,14 @@ export class Renderer {
     const w = this.w;
     const h = this.h;
     const topBar = 52;
-    const thumbZone = h > w ? h * 0.33 : 108;
+    const controls = document.getElementById("controls");
+    let thumbZone = h > w ? h * 0.33 : 148;
+    if (controls && !controls.classList.contains("hidden")) {
+      const top = controls.getBoundingClientRect().top;
+      if (controls.getBoundingClientRect().height > 0) {
+        thumbZone = Math.max(96, h - top);
+      }
+    }
     const playH = Math.max(80, h - topBar - thumbZone);
     const cx = w * 0.5;
     const cy = topBar + playH * 0.5;

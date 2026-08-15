@@ -781,8 +781,9 @@ body.is-landscape .exit-btn {
   transition: inset 0.28s ease, padding 0.28s ease;
 }
 body.is-landscape .controls {
-  height: 120px;
-  max-height: 36%;
+  height: calc(128px + 20px + var(--safe-bottom));
+  min-height: 148px;
+  max-height: 42%;
 }
 
 .hud,
@@ -795,8 +796,8 @@ body.is-landscape .controls {
 
 .virtual-pad {
   position: relative;
-  width: 132px;
-  height: 132px;
+  width: 128px;
+  height: 128px;
   border-radius: 50%;
   background: rgba(8, 28, 34, 0.28);
   border: 1px solid rgba(232, 244, 242, 0.14);
@@ -815,6 +816,7 @@ body.is-landscape .controls {
   inset: 18%;
   border-radius: 50%;
   border: 1px dashed rgba(232, 244, 242, 0.14);
+  pointer-events: none;
 }
 
 .pad-cross::before,
@@ -848,6 +850,7 @@ body.is-landscape .controls {
   border: 1px solid rgba(232, 244, 242, 0.35);
   transform: translate(-50%, -50%);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
 }
 
 .boost-btn {
@@ -1159,6 +1162,7 @@ body.is-portrait .controls {
 body.is-portrait .virtual-pad {
   width: 128px;
   height: 128px;
+  margin-bottom: 0;
 }
 
 body.is-portrait .boost-btn {
@@ -1179,8 +1183,8 @@ body.is-portrait .exit-btn {
   }
 
   body.is-portrait .virtual-pad {
-    width: 118px;
-    height: 118px;
+    width: 128px;
+    height: 128px;
   }
 
   body.is-portrait .boost-btn {
@@ -1194,9 +1198,9 @@ body.is-portrait .exit-btn {
   position: relative;
   right: auto;
   bottom: auto;
-  width: 72px;
-  height: 72px;
-  margin: 0 0 8px;
+  width: 84px;
+  height: 84px;
+  margin: 0;
   flex-shrink: 0;
   z-index: 5;
   padding: 0;
@@ -1246,7 +1250,7 @@ body.is-portrait .exit-btn {
 .boost-skill.active .boost-ring-fill { stroke: #e8c27a; }
 .boost-skill.locked .boost-ring-fill { stroke: #6a8a86; }
 body.is-portrait .boost-skill {
-  width: 76px;
-  height: 76px;
-  margin-bottom: 12px;
+  width: 84px;
+  height: 84px;
+  margin: 0;
 }

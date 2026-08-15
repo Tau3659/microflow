@@ -1,6 +1,7 @@
 /**
  * 左侧虚拟摇杆只改方向 + 右侧加速键按住释放
- * 不要全屏点拖。桌面 WASD / 空格兜底。
+ * 摇杆直径 128、满行程 34%、死区 0.12；松手停。力度只变速不耗槽。
+ * 加速右下 84，和空格同一套，可与摇杆两指同时按。
  */
 export class Input {
   constructor(canvas) {
@@ -113,14 +114,22 @@ export class Input {
     const py = rect.top + rect.height / 2;
     let dx = clientX - px;
     let dy = clientY - py;
-    const max = Math.max(28, rect.width * 0.42);
+    const max = rect.width * 0.34;
     const len = Math.hypot(dx, dy) || 1;
-    const mag = Math.min(1, len / max);
-    this.dirX = (dx / len) * mag;
-    this.dirY = (dy / len) * mag;
-    this.pull = mag;
-    const kx = this.dirX * max;
-    const ky = this.dirY * max;
+    const raw = Math.min(1, len / max);
+    const dead = 0.12;
+    if (raw <= dead) {
+      this.dirX = 0;
+      this.dirY = 0;
+      this.pull = 0;
+    } else {
+      this.dirX = (dx / len) * raw;
+      this.dirY = (dy / len) * raw;
+      this.pull = raw;
+    }
+    const clamped = Math.min(len, max);
+    const kx = (dx / len) * clamped;
+    const ky = (dy / len) * clamped;
     if (this.knob) {
       this.knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
     }
