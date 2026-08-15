@@ -151,35 +151,48 @@ export class Renderer {
     ctx.restore();
   }
 
-  /** 载玻片圆形暗角 + 边缘 1–2px 色散 */
+  /** 载玻片镜圈：圈外实黑、厚玻璃沿、红青色散 */
   drawSlideVignette() {
     const ctx = this.ctx;
     const cx = this.w * 0.5;
     const cy = this.h * 0.48;
-    const rx = this.w * 0.58;
-    const ry = this.h * 0.5;
+    const r = Math.min(this.w, this.h) * 0.46;
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, this.w, this.h);
-    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2, true);
-    ctx.fillStyle = "rgba(3, 16, 22, 0.62)";
+    ctx.arc(cx, cy, r, 0, Math.PI * 2, true);
+    ctx.fillStyle = "#031016";
     ctx.fill("evenodd");
-    const g = ctx.createRadialGradient(cx, cy, Math.min(rx, ry) * 0.72, cx, cy, Math.max(rx, ry) * 1.05);
-    g.addColorStop(0, "rgba(3,16,22,0)");
-    g.addColorStop(0.65, "rgba(3,16,22,0.12)");
-    g.addColorStop(1, "rgba(3,16,22,0.55)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, this.w, this.h);
+
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(224, 90, 106, 0.28)";
-    ctx.lineWidth = 1.4;
-    ctx.ellipse(cx - 1, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(186, 224, 220, 0.28)";
+    ctx.lineWidth = 11;
     ctx.stroke();
     ctx.beginPath();
-    ctx.strokeStyle = "rgba(62, 207, 176, 0.32)";
-    ctx.lineWidth = 1.4;
-    ctx.ellipse(cx + 1, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.arc(cx, cy, r - 5.5, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.38)";
+    ctx.lineWidth = 1.6;
     ctx.stroke();
+
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(224, 90, 106, 0.45)";
+    ctx.lineWidth = 3;
+    ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(62, 207, 176, 0.45)";
+    ctx.lineWidth = 3;
+    ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const vg = ctx.createRadialGradient(cx, cy, r * 0.92, cx, cy, r);
+    vg.addColorStop(0, "rgba(3,16,22,0)");
+    vg.addColorStop(1, "rgba(3,16,22,0.08)");
+    ctx.beginPath();
+    ctx.fillStyle = vg;
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 
@@ -204,10 +217,10 @@ export class Renderer {
     }
   }
 
-  drawCilia(ctx, radius, alpha, density = 16) {
+  drawCilia(ctx, radius, alpha, density = 24) {
     ctx.strokeStyle = hexToRgba("#e8f4f2", alpha * 0.4);
     ctx.lineWidth = 1;
-    const n = Math.max(10, density);
+    const n = Math.max(24, density);
     for (let i = 0; i < n; i += 1) {
       const a = (Math.PI * 2 * i) / n + this.time * 1.5;
       const wobble = Math.sin(this.time * 8 + i) * 2;
@@ -295,17 +308,20 @@ export class Renderer {
     const core = hexToRgba(creature.coreColor || "#e8f4f2", alpha * (ghost ? 0.35 : 0.9));
     const bodyGrad = (x0, y0, rad) => {
       const g = ctx.createRadialGradient(x0 - rad * 0.35, y0 - rad * 0.4, rad * 0.1, x0, y0, rad);
-      g.addColorStop(0, hexToRgba("#ffffff", alpha * (ghost ? 0.25 : 0.45)));
-      g.addColorStop(0.35, hexToRgba(creature.color, alpha * (ghost ? 0.5 : 0.88)));
-      g.addColorStop(1, hexToRgba(creature.membrane || creature.color, alpha * (ghost ? 0.25 : 0.75)));
+      g.addColorStop(0, hexToRgba("#ffffff", alpha * (ghost ? 0.22 : 0.55)));
+      g.addColorStop(0.4, hexToRgba(creature.coreColor || creature.color, alpha * (ghost ? 0.42 : 0.85)));
+      g.addColorStop(1, hexToRgba(creature.membrane || creature.color, alpha * (ghost ? 0.22 : 0.7)));
       return g;
     };
 
     ctx.save();
     ctx.rotate(creature.angle);
-    if (!ghost) {
-      ctx.shadowColor = hexToRgba(creature.color, 0.35);
-      ctx.shadowBlur = 12;
+    const isPlayer = creature.kind === "player";
+    if (!ghost && isPlayer) {
+      ctx.shadowColor = hexToRgba(creature.color, 0.55);
+      ctx.shadowBlur = 22;
+    } else {
+      ctx.shadowBlur = 0;
     }
 
     if (morph === MORPH.BACILLUS) {
@@ -427,7 +443,7 @@ export class Renderer {
         }
       }
       this.drawComplexityDetails(ctx, creature, r * 0.75, alpha, ghost);
-      if (creature.cilia) this.drawCilia(ctx, r * 1.05, alpha, 12 + complexity * 3);
+      if (creature.cilia || creature.kind === "player") this.drawCilia(ctx, r * 1.05, alpha, creature.kind === "player" ? Math.max(24, 12 + complexity * 3) : 12 + complexity * 3);
     } else if (morph === MORPH.VIRUS) {
       ctx.beginPath();
       ctx.fillStyle = bodyGrad(0, 0, r * 0.9);
@@ -587,7 +603,7 @@ export class Renderer {
         ctx.stroke();
       }
       this.drawComplexityDetails(ctx, creature, r, alpha, ghost);
-      if (creature.cilia) this.drawCilia(ctx, Math.max(rx, ry), alpha, 14 + complexity * 4);
+      if (creature.cilia || creature.kind === "player") this.drawCilia(ctx, Math.max(rx, ry), alpha, creature.kind === "player" ? Math.max(24, 14 + complexity * 4) : 14 + complexity * 4);
     }
 
     // 荚膜外晕（玩家获得荚膜能力时）
@@ -990,7 +1006,9 @@ export class Renderer {
           0.58 +
           Math.sin(creature.pulse * 1.55) * 0.12 +
           Math.sin(this.time * 2.2 + (creature.id || 0) * 0.7) * 0.1;
-        const bodyAlpha = (creature.kind === "player" ? 0.78 : 0.64) * shimmer;
+        const isPlayer = creature.kind === "player";
+        const bodyAlpha = isPlayer ? 0.82 * shimmer : 0.45;
+        if (!isPlayer) ctx.filter = "blur(1.4px)";
 
         // 进化过渡：旧形态淡出、新形态淡入，体现成长而非瞬变
         if (creature.kind === "player" && creature.evolutionTween && creature.renderFrom) {
@@ -1002,8 +1020,27 @@ export class Renderer {
         } else {
           this.drawMorphBody(creature, bodyAlpha, false);
         }
-        if (creature.kind === "player") {
+        if (isPlayer) {
           const r = creature.radius;
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba(creature.membrane || creature.color, 0.5 * shimmer);
+          ctx.lineWidth = 3.5;
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.strokeStyle = hexToRgba(creature.coreColor || "#9be8d6", 0.72 * shimmer);
+          ctx.lineWidth = 2;
+          ctx.arc(0, 0, r * 0.88, 0, Math.PI * 2);
+          ctx.stroke();
+          const nr = r * 0.28;
+          const ng = ctx.createRadialGradient(-nr * 0.4, -nr * 0.45, 0, 0, 0, nr);
+          ng.addColorStop(0, "rgba(255,255,255,0.88)");
+          ng.addColorStop(0.45, hexToRgba(creature.coreColor, 0.9));
+          ng.addColorStop(1, hexToRgba(creature.membrane || creature.color, 0.3));
+          ctx.beginPath();
+          ctx.fillStyle = ng;
+          ctx.arc(-nr * 0.08, -nr * 0.1, nr, 0, Math.PI * 2);
+          ctx.fill();
           const spec = ctx.createRadialGradient(-r * 0.35, -r * 0.42, 0, 0, 0, r * 1.05);
           spec.addColorStop(0, "rgba(255,255,255,0.38)");
           spec.addColorStop(0.28, "rgba(155,232,214,0.12)");

@@ -515,26 +515,31 @@ body.is-landscape .exit-btn {
 }
 
 .hud-floor {
-  min-width: 2rem;
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
   margin: 0;
-  padding: 0.2rem 0.65rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text);
-  font-size: 1.35rem;
+  font-size: 1.15rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  line-height: 2rem;
+  letter-spacing: 0;
+  line-height: 1;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
   pointer-events: none;
-  opacity: 0.92;
-  border-radius: 42% 58% 48% 52%;
+  opacity: 0.95;
+  border-radius: 50%;
   background:
-    radial-gradient(ellipse at 35% 30%, rgba(255, 255, 255, 0.22), transparent 55%),
-    radial-gradient(ellipse at 50% 50%, rgba(62, 207, 176, 0.2), rgba(3, 16, 22, 0.15) 70%);
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.28), transparent 42%),
+    radial-gradient(circle at 50% 50%, rgba(62, 207, 176, 0.12), transparent 70%);
+  border: 2.5px solid rgba(62, 207, 176, 0.5);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 0 10px rgba(62, 207, 176, 0.18);
-  border: 1px solid rgba(62, 207, 176, 0.28);
+    inset 0 0 0 2px rgba(155, 232, 214, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .exit-btn {
@@ -542,20 +547,26 @@ body.is-landscape .exit-btn {
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid rgba(62, 207, 176, 0.4);
+  border: 2.5px solid rgba(62, 207, 176, 0.55);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.28), transparent 42%),
-    radial-gradient(circle at 50% 50%, rgba(8, 40, 44, 0.35), rgba(3, 16, 22, 0.55));
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.18), transparent 40%),
+    transparent;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 0 8px rgba(62, 207, 176, 0.22);
+    inset 0 0 0 2px rgba(26, 107, 98, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   pointer-events: auto;
-  opacity: 0.85;
+  opacity: 0.9;
+}
+
+.exit-btn .icon-close::before,
+.exit-btn .icon-close::after {
+  background: var(--accent);
+  height: 1.5px;
+  width: 55%;
 }
 
 .exit-btn:active {
