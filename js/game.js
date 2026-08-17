@@ -145,6 +145,23 @@ export class Game {
     const k = hard ? 1 : 0.12;
     this.camera.x += (targetX - this.camera.x) * k;
     this.camera.y += (targetY - this.camera.y) * k;
+    this._clampCamera(this.level?.world);
+  }
+
+  _clampCamera(world) {
+    if (!world) return;
+    const z = this.renderer.viewZoom || 1;
+    const { cx, cy } = this.renderer.slideMetrics();
+    const w = this.renderer.w;
+    const h = this.renderer.h;
+    const left = this.camera.x + cx * (1 - 1 / z);
+    const top = this.camera.y + cy * (1 - 1 / z);
+    const right = this.camera.x + cx + (w - cx) / z;
+    const bottom = this.camera.y + cy + (h - cy) / z;
+    if (left < 0) this.camera.x -= left;
+    if (top < 0) this.camera.y -= top;
+    if (right > world.width) this.camera.x -= right - world.width;
+    if (bottom > world.height) this.camera.y -= bottom - world.height;
   }
 
   _canEvolve() {
@@ -210,10 +227,7 @@ export class Game {
     this.input.refresh();
     updatePlayer(player, this.input, dt);
     if (player.evolutionTween) updateEvolution(player, dt);
-    const wrap = wrapEntity(player, level.world);
-    // 环面穿越时同步相机，避免“撞墙感”
-    this.camera.x += wrap.wx;
-    this.camera.y += wrap.wy;
+    wrapEntity(player, level.world);
 
     for (const c of level.creatures) {
       updateEnemy(c, player, dt, level.world, level.proteins);

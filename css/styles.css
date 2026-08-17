@@ -773,17 +773,17 @@ body.is-landscape .exit-btn {
   flex-direction: row;
   padding:
     0
-    calc(18px + var(--safe-right))
-    calc(18px + var(--safe-bottom))
-    calc(18px + var(--safe-left));
+    calc(32px + var(--safe-right))
+    calc(28px + var(--safe-bottom))
+    calc(32px + var(--safe-left));
   pointer-events: none;
   z-index: 4;
   transition: inset 0.28s ease, padding 0.28s ease;
 }
 body.is-landscape .controls {
-  height: calc(128px + 20px + var(--safe-bottom));
-  min-height: 148px;
-  max-height: 42%;
+  height: calc(148px + 32px + var(--safe-bottom));
+  min-height: 168px;
+  max-height: 46%;
 }
 
 .hud,
@@ -796,8 +796,8 @@ body.is-landscape .controls {
 
 .virtual-pad {
   position: relative;
-  width: 128px;
-  height: 128px;
+  width: 148px;
+  height: 148px;
   border-radius: 50%;
   background: rgba(8, 28, 34, 0.28);
   border: 1px solid rgba(232, 244, 242, 0.14);
@@ -1085,35 +1085,35 @@ body.is-landscape .controls {
 }
 
 body.is-landscape .virtual-pad {
-  width: 118px;
-  height: 118px;
+  width: 148px;
+  height: 148px;
 }
 
 body.is-landscape .boost-skill {
-  width: 84px;
-  height: 84px;
+  width: 100px;
+  height: 100px;
   margin-bottom: 0;
 }
 
 @media (min-height: 420px) {
   body.is-landscape .virtual-pad {
-    width: 132px;
-    height: 132px;
+    width: 148px;
+    height: 148px;
   }
   body.is-landscape .boost-skill {
-    width: 84px;
-    height: 84px;
+    width: 100px;
+    height: 100px;
   }
 }
 
 @media (min-width: 768px) {
   body.is-landscape .virtual-pad {
-    width: 140px;
-    height: 140px;
+    width: 156px;
+    height: 156px;
   }
   body.is-landscape .boost-skill {
-    width: 84px;
-    height: 84px;
+    width: 100px;
+    height: 100px;
   }
 }
 
@@ -1154,20 +1154,20 @@ body.is-portrait .controls {
   justify-content: space-between;
   padding:
     0
-    calc(16px + var(--safe-right))
-    calc(20px + var(--safe-bottom))
-    calc(16px + var(--safe-left));
+    calc(32px + var(--safe-right))
+    calc(28px + var(--safe-bottom))
+    calc(32px + var(--safe-left));
 }
 
 body.is-portrait .virtual-pad {
-  width: 128px;
-  height: 128px;
+  width: 148px;
+  height: 148px;
   margin-bottom: 0;
 }
 
 body.is-portrait .boost-skill {
-  width: 84px;
-  height: 84px;
+  width: 100px;
+  height: 100px;
   margin-bottom: 0;
 }
 
@@ -1179,17 +1179,17 @@ body.is-portrait .exit-btn {
 /* 竖屏且较窄：控件略上移，避开手势条 */
 @media (max-width: 480px) {
   body.is-portrait .controls {
-    padding-bottom: calc(28px + var(--safe-bottom));
+    padding-bottom: calc(36px + var(--safe-bottom));
   }
 
   body.is-portrait .virtual-pad {
-    width: 128px;
-    height: 128px;
+    width: 148px;
+    height: 148px;
   }
 
   body.is-portrait .boost-skill {
-    width: 84px;
-    height: 84px;
+    width: 100px;
+    height: 100px;
     margin-bottom: 0;
   }
 }
@@ -1198,8 +1198,8 @@ body.is-portrait .exit-btn {
   position: relative;
   right: auto;
   bottom: auto;
-  width: 84px;
-  height: 84px;
+  width: 100px;
+  height: 100px;
   margin: 0;
   flex-shrink: 0;
   z-index: 5;
@@ -1250,7 +1250,7 @@ body.is-portrait .exit-btn {
 .boost-skill.active .boost-ring-fill { stroke: #e8c27a; }
 .boost-skill.locked .boost-ring-fill { stroke: #6a8a86; }
 body.is-portrait .boost-skill {
-  width: 84px;
-  height: 84px;
+  width: 100px;
+  height: 100px;
   margin: 0;
 }

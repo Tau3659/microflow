@@ -17,22 +17,12 @@ function camOf(camera, factor) {
 
 /** 环面地图：在边界附近绘制镜像副本，消除接缝 */
 function forEachWrapDraw(x, y, camera, world, viewW, viewH, margin, fn) {
-  const offsetsX = [0];
-  const offsetsY = [0];
-  if (world) {
-    offsetsX.push(-world.width, world.width);
-    offsetsY.push(-world.height, world.height);
+  const sx = x - camera.x;
+  const sy = y - camera.y;
+  if (sx < -margin || sy < -margin || sx > viewW + margin || sy > viewH + margin) {
+    return;
   }
-  for (const ox of offsetsX) {
-    for (const oy of offsetsY) {
-      const sx = x + ox - camera.x;
-      const sy = y + oy - camera.y;
-      if (sx < -margin || sy < -margin || sx > viewW + margin || sy > viewH + margin) {
-        continue;
-      }
-      fn(sx, sy, ox, oy);
-    }
-  }
+  fn(sx, sy, 0, 0);
 }
 
 export class Renderer {
@@ -49,7 +39,7 @@ export class Renderer {
     this.viewZoom = 1.3 / 1.4;
   }
 
-  /** 镜圈：竖屏左右窄黑边，底拇指区不压控件 */
+  /** 镜圈：圆心偏上，半径可超出窗口被裁 */
   slideMetrics() {
     const w = this.w;
     const h = this.h;
@@ -64,8 +54,8 @@ export class Renderer {
     }
     const playH = Math.max(80, h - topBar - thumbZone);
     const cx = w * 0.5;
-    const cy = topBar + playH * 0.5;
-    const r = Math.min(w * 0.5 - 8, playH * 0.5);
+    const cy = topBar + playH * 0.48;
+    const r = Math.min(w * 0.62, Math.max(playH * 0.58, cy * 1.08));
     return { cx, cy, r, topBar, thumbZone, playH };
   }
 
@@ -122,7 +112,6 @@ export class Renderer {
     if (r < 8) return;
     const clipR = r / Math.max(0.01, zoom || 1);
     const accent = layer.accent || "#3ecfb0";
-    const protein = layer.protein || "#9be8d6";
     const slowK = PARALLAX.slow;
     const fastK = PARALLAX.fast;
     const srcX = level.player?.x ?? camera.x;
@@ -148,31 +137,13 @@ export class Renderer {
       ctx.arc(bx, by, br, 0, Math.PI * 2);
       ctx.fill();
     }
-    for (let i = 0; i < 4; i += 1) {
-      const bx = this._wrapShift(i * 419 + 180, srcX * slowK, spanSX, 120);
-      const by = this._wrapShift(i * 307 + 90, srcY * slowK, spanSY, 120);
-      ctx.save();
-      ctx.translate(bx, by);
-      ctx.rotate(i * 0.9);
-      ctx.fillStyle = hexToRgba(accent, 0.14);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 38 + i * 6, 14 + i * 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
     const field = Math.max(160, clipR * 1.85);
     for (let i = 0; i < 16; i += 1) {
       const px = cx + this._wrapShift(i * 97 + 11, srcX * fastK, field, field * 0.5);
       const py = cy + this._wrapShift(i * 83 + 19, srcY * fastK, field, field * 0.5);
-      const bright = 0.66 + (i % 4) * 0.08;
-      ctx.fillStyle = hexToRgba(i % 3 === 0 ? protein : "#e8f4f2", bright);
+      ctx.fillStyle = `rgba(168, 196, 194, ${0.28 + (i % 4) * 0.05})`;
       ctx.beginPath();
-      if (i % 4 === 0) {
-        ctx.ellipse(px, py, 3.6, 1.5, i * 0.6, 0, Math.PI * 2);
-      } else {
-        ctx.arc(px, py, 2.3 + (i % 3) * 0.5, 0, Math.PI * 2);
-      }
+      ctx.arc(px, py, 1.6 + (i % 3) * 0.35, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -690,18 +661,26 @@ export class Renderer {
   drawProteins(proteins, camera, world) {
     const ctx = this.ctx;
     for (const p of proteins) {
-      forEachWrapDraw(p.x, p.y, camera, world, this.w, this.h, 24, (x, y) => {
-        const pulse = 0.85 + Math.sin(this.time * 3.2 + p.phase) * 0.15;
-        const g = ctx.createRadialGradient(x - 1, y - 1, 0.5, x, y, p.r * pulse * 1.6);
-        g.addColorStop(0, hexToRgba("#ffffff", 0.85));
-        g.addColorStop(0.4, hexToRgba(p.color, 0.95));
+      forEachWrapDraw(p.x, p.y, camera, world, this.w, this.h, 28, (x, y) => {
+        const pulse = 0.9 + Math.sin(this.time * 3.2 + p.phase) * 0.12;
+        const rr = Math.max(5.5, p.r * pulse);
+        const g = ctx.createRadialGradient(x - 1.2, y - 1.4, 0.4, x, y, rr * 1.85);
+        g.addColorStop(0, "rgba(255,255,255,0.95)");
+        g.addColorStop(0.28, hexToRgba(p.color, 1));
+        g.addColorStop(0.7, hexToRgba(p.color, 0.45));
         g.addColorStop(1, hexToRgba(p.color, 0));
         ctx.beginPath();
         ctx.fillStyle = g;
         ctx.shadowColor = p.color;
-        ctx.shadowBlur = 12;
-        ctx.arc(x, y, p.r * pulse, 0, Math.PI * 2);
+        ctx.shadowBlur = 14;
+        ctx.arc(x, y, rr, 0, Math.PI * 2);
         ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(255,255,255,0.7)";
+        ctx.lineWidth = 1.4;
+        ctx.arc(x, y, rr * 0.55, 0, Math.PI * 2);
+        ctx.stroke();
       });
     }
     ctx.shadowBlur = 0;

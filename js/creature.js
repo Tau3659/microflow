@@ -33,40 +33,44 @@ export function normalize(x, y) {
   return { x: x / len, y: y / len };
 }
 
-/** 环面地图：穿越边界无墙感 */
+/** 固定矩形世界：撞边停下，位置钳在自身半径以内 */
 export function wrapEntity(entity, world) {
-  let wx = 0;
-  let wy = 0;
-  if (!world) return { wx, wy };
-  while (entity.x < 0) {
-    entity.x += world.width;
-    wx += world.width;
-  }
-  while (entity.x >= world.width) {
-    entity.x -= world.width;
-    wx -= world.width;
-  }
-  while (entity.y < 0) {
-    entity.y += world.height;
-    wy += world.height;
-  }
-  while (entity.y >= world.height) {
-    entity.y -= world.height;
-    wy -= world.height;
-  }
-  return { wx, wy };
+  return clampEntity(entity, world);
 }
 
-/** 最短环面向量 */
-export function wrappedOffset(fromX, fromY, toX, toY, world) {
-  let dx = toX - fromX;
-  let dy = toY - fromY;
-  if (world) {
-    if (dx > world.width / 2) dx -= world.width;
-    if (dx < -world.width / 2) dx += world.width;
-    if (dy > world.height / 2) dy -= world.height;
-    if (dy < -world.height / 2) dy += world.height;
+export function clampEntity(entity, world) {
+  if (!world) return { wx: 0, wy: 0, hit: false };
+  const r = Math.max(2, entity.radius || entity.r || 8);
+  const minX = r;
+  const maxX = world.width - r;
+  const minY = r;
+  const maxY = world.height - r;
+  let hit = false;
+  if (entity.x < minX) {
+    entity.x = minX;
+    if ((entity.vx || 0) < 0) entity.vx = 0;
+    hit = true;
+  } else if (entity.x > maxX) {
+    entity.x = maxX;
+    if ((entity.vx || 0) > 0) entity.vx = 0;
+    hit = true;
   }
+  if (entity.y < minY) {
+    entity.y = minY;
+    if ((entity.vy || 0) < 0) entity.vy = 0;
+    hit = true;
+  } else if (entity.y > maxY) {
+    entity.y = maxY;
+    if ((entity.vy || 0) > 0) entity.vy = 0;
+    hit = true;
+  }
+  return { wx: 0, wy: 0, hit };
+}
+
+/** 平面向量（不再走环面最短路） */
+export function wrappedOffset(fromX, fromY, toX, toY, _world) {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
   return { dx, dy, dist: Math.hypot(dx, dy) };
 }
 
@@ -1040,10 +1044,9 @@ export function sweepCircularIntake(player, items, world, dt) {
     item.x = player.x + targetX;
     item.y = player.y + targetY;
     if (world) {
-      if (item.x < 0) item.x += world.width;
-      else if (item.x >= world.width) item.x -= world.width;
-      if (item.y < 0) item.y += world.height;
-      else if (item.y >= world.height) item.y -= world.height;
+      const rr = item.r || 4;
+      item.x = Math.max(rr, Math.min(world.width - rr, item.x));
+      item.y = Math.max(rr, Math.min(world.height - rr, item.y));
     }
     item.phase = (item.phase || 0) + dt * 12;
   }
