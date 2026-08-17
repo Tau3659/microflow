@@ -39,7 +39,7 @@ export class Renderer {
     this.viewZoom = 1.3 / 1.4;
   }
 
-  /** 镜圈：圆心偏上，半径可超出窗口被裁 */
+  /** 镜圈：圆心 (w/2, h*0.40)，半径 max(w*0.58, h*0.38)，可切左右顶 */
   slideMetrics() {
     const w = this.w;
     const h = this.h;
@@ -54,8 +54,8 @@ export class Renderer {
     }
     const playH = Math.max(80, h - topBar - thumbZone);
     const cx = w * 0.5;
-    const cy = topBar + playH * 0.48;
-    const r = Math.min(w * 0.62, Math.max(playH * 0.58, cy * 1.08));
+    const cy = h * 0.40;
+    const r = Math.max(w * 0.58, h * 0.38);
     return { cx, cy, r, topBar, thumbZone, playH };
   }
 
@@ -127,24 +127,38 @@ export class Renderer {
     for (let i = 0; i < 7; i += 1) {
       const bx = this._wrapShift(i * 367 + 40, srcX * slowK, spanSX, 120);
       const by = this._wrapShift(i * 271 + 80, srcY * slowK, spanSY, 120);
-      const br = 42 + (i % 4) * 12;
-      const g = ctx.createRadialGradient(bx, by, 4, bx, by, br);
-      g.addColorStop(0, hexToRgba(accent, 0.22));
-      g.addColorStop(0.45, hexToRgba(accent, 0.08));
-      g.addColorStop(1, hexToRgba(accent, 0));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(bx, by, br, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.rotate((i * 0.73) % Math.PI);
+      for (let k = 0; k < 3; k += 1) {
+        const a = i * 0.9 + k * 2.15;
+        const ox = Math.cos(a) * (16 + (i % 5) * 4);
+        const oy = Math.sin(a * 1.37) * (10 + (i % 4) * 5);
+        const rx = 54 + k * 14 + (i % 3) * 8;
+        const ry = 26 + k * 7 + ((i + k) % 4) * 5;
+        const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, Math.max(rx, ry));
+        g.addColorStop(0, hexToRgba(accent, 0.09));
+        g.addColorStop(0.42, hexToRgba(accent, 0.035));
+        g.addColorStop(1, hexToRgba(accent, 0));
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(ox, oy, rx, ry, a * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
     const field = Math.max(160, clipR * 1.85);
     for (let i = 0; i < 16; i += 1) {
       const px = cx + this._wrapShift(i * 97 + 11, srcX * fastK, field, field * 0.5);
       const py = cy + this._wrapShift(i * 83 + 19, srcY * fastK, field, field * 0.5);
-      ctx.fillStyle = `rgba(168, 196, 194, ${0.28 + (i % 4) * 0.05})`;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate((i * 1.17) % Math.PI);
+      ctx.fillStyle = `rgba(148, 168, 166, ${0.20 + (i % 3) * 0.04})`;
       ctx.beginPath();
-      ctx.arc(px, py, 1.6 + (i % 3) * 0.35, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, 2.5 + (i % 3) * 0.35, 0.85 + (i % 2) * 0.2, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -662,25 +676,33 @@ export class Renderer {
     const ctx = this.ctx;
     for (const p of proteins) {
       forEachWrapDraw(p.x, p.y, camera, world, this.w, this.h, 28, (x, y) => {
-        const pulse = 0.9 + Math.sin(this.time * 3.2 + p.phase) * 0.12;
-        const rr = Math.max(5.5, p.r * pulse);
-        const g = ctx.createRadialGradient(x - 1.2, y - 1.4, 0.4, x, y, rr * 1.85);
-        g.addColorStop(0, "rgba(255,255,255,0.95)");
-        g.addColorStop(0.28, hexToRgba(p.color, 1));
-        g.addColorStop(0.7, hexToRgba(p.color, 0.45));
-        g.addColorStop(1, hexToRgba(p.color, 0));
-        ctx.beginPath();
-        ctx.fillStyle = g;
+        const pulse = 1 + Math.sin(this.time * 1.7 + p.phase) * 0.07;
+        const rr = Math.max(6.8, p.r * pulse);
+        const hx = x - rr * 0.28;
+        const hy = y - rr * 0.32;
         ctx.shadowColor = p.color;
-        ctx.shadowBlur = 14;
+        ctx.shadowBlur = 16;
+        const body = ctx.createRadialGradient(hx, hy, rr * 0.08, x, y, rr);
+        body.addColorStop(0, "rgba(255,255,255,0.95)");
+        body.addColorStop(0.22, hexToRgba(p.color, 1));
+        body.addColorStop(0.78, hexToRgba(p.color, 0.72));
+        body.addColorStop(1, hexToRgba(p.color, 0.18));
+        ctx.beginPath();
+        ctx.fillStyle = body;
         ctx.arc(x, y, rr, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
+        const nr = rr * 0.38;
+        const nx = x - rr * 0.12;
+        const ny = y - rr * 0.14;
+        const core = ctx.createRadialGradient(nx - nr * 0.28, ny - nr * 0.32, 0, nx, ny, nr);
+        core.addColorStop(0, "rgba(255,255,255,0.95)");
+        core.addColorStop(0.45, hexToRgba(p.color, 0.95));
+        core.addColorStop(1, hexToRgba(p.color, 0.2));
         ctx.beginPath();
-        ctx.strokeStyle = "rgba(255,255,255,0.7)";
-        ctx.lineWidth = 1.4;
-        ctx.arc(x, y, rr * 0.55, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.fillStyle = core;
+        ctx.arc(nx, ny, nr, 0, Math.PI * 2);
+        ctx.fill();
       });
     }
     ctx.shadowBlur = 0;

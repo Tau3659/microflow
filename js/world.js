@@ -49,7 +49,7 @@ export function createProtein(layer, x, y) {
     type: "protein",
     x: x ?? rand(40, WORLD.width - 40),
     y: y ?? rand(40, WORLD.height - 40),
-    r: rand(4, 7),
+    r: rand(6.8, 8.4),
     value: 1,
     phase: rand(0, Math.PI * 2),
     color: layer.protein,
