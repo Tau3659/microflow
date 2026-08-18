@@ -102,15 +102,13 @@ export class Renderer {
   }
 
   /**
-   * 镜圈内双层视差：慢光斑/远菌影 0.25，近碎屑 0.55，位移与游动相反。
-   * 圈外仍由载玻片实黑盖住。快层圈内保持 12–16 粒可读。
+   * 全屏双层视差：慢光斑 0.25，近碎屑 0.55，位移与游动相反。
+   * 不再裁在镜圈里。
    */
   drawMotionParallax(level, camera, zoom = 1) {
     const ctx = this.ctx;
     const layer = level.layer;
-    const { cx, cy, r } = this.slideMetrics();
-    if (r < 8) return;
-    const clipR = r / Math.max(0.01, zoom || 1);
+    const { cx, cy } = this.slideMetrics();
     const accent = layer.accent || "#3ecfb0";
     const slowK = PARALLAX.slow;
     const fastK = PARALLAX.fast;
@@ -118,9 +116,6 @@ export class Renderer {
     const srcY = level.player?.y ?? camera.y;
 
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, clipR, 0, Math.PI * 2);
-    ctx.clip();
 
     const spanSX = this.w + 240;
     const spanSY = this.h + 240;
@@ -147,7 +142,7 @@ export class Renderer {
       }
       ctx.restore();
     }
-    const field = Math.max(160, clipR * 1.85);
+    const field = Math.max(160, Math.max(this.w, this.h) * 0.95);
     for (let i = 0; i < 16; i += 1) {
       const px = cx + this._wrapShift(i * 97 + 11, srcX * fastK, field, field * 0.5);
       const py = cy + this._wrapShift(i * 83 + 19, srcY * fastK, field, field * 0.5);
@@ -163,16 +158,29 @@ export class Renderer {
     ctx.restore();
   }
 
-  /** 载玻片镜圈：圈外实黑、厚玻璃沿、红青色散 */
+  /** 氛围沿：玻璃圈 + 暗角，不遮世界、不当墙。沿不压底栏控件 */
   drawSlideVignette() {
     const ctx = this.ctx;
-    const { cx, cy, r } = this.slideMetrics();
+    const { cx, cy, r, thumbZone } = this.slideMetrics();
     ctx.save();
+    const vg = ctx.createRadialGradient(
+      cx,
+      cy,
+      Math.min(this.w, this.h) * 0.22,
+      cx,
+      cy,
+      Math.hypot(this.w, this.h) * 0.58
+    );
+    vg.addColorStop(0, "rgba(3,16,22,0)");
+    vg.addColorStop(0.62, "rgba(3,16,22,0.06)");
+    vg.addColorStop(1, "rgba(3,16,22,0.38)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, this.w, this.h);
+
+    const playBottom = Math.max(8, this.h - Math.max(96, thumbZone || 0));
     ctx.beginPath();
-    ctx.rect(0, 0, this.w, this.h);
-    ctx.arc(cx, cy, r, 0, Math.PI * 2, true);
-    ctx.fillStyle = "#031016";
-    ctx.fill("evenodd");
+    ctx.rect(0, 0, this.w, playBottom);
+    ctx.clip();
 
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -184,7 +192,6 @@ export class Renderer {
     ctx.strokeStyle = "rgba(255, 255, 255, 0.38)";
     ctx.lineWidth = 1.6;
     ctx.stroke();
-
     ctx.beginPath();
     ctx.strokeStyle = "rgba(224, 90, 106, 0.45)";
     ctx.lineWidth = 3;
@@ -195,14 +202,6 @@ export class Renderer {
     ctx.lineWidth = 3;
     ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
     ctx.stroke();
-
-    const vg = ctx.createRadialGradient(cx, cy, r * 0.92, cx, cy, r);
-    vg.addColorStop(0, "rgba(3,16,22,0)");
-    vg.addColorStop(1, "rgba(3,16,22,0.08)");
-    ctx.beginPath();
-    ctx.fillStyle = vg;
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
     ctx.restore();
   }
 
@@ -1310,15 +1309,12 @@ export class Renderer {
 
     const flow = this.counterFlow;
 
-    ctx.save();
     if (z !== 1) {
+      ctx.save();
       ctx.translate(slide.cx, slide.cy);
       ctx.scale(z, z);
       ctx.translate(-slide.cx, -slide.cy);
     }
-    ctx.beginPath();
-    ctx.arc(slide.cx, slide.cy, slide.r / Math.max(0.01, z), 0, Math.PI * 2);
-    ctx.clip();
 
     this.drawLayeredBackground(level);
     this.drawMotionParallax(level, camera, z);
@@ -1343,7 +1339,7 @@ export class Renderer {
         transitionAccent || level.layer?.accent || "#3ecfb0"
       );
     }
-    ctx.restore();
+    if (z !== 1) ctx.restore();
     this.drawSlideVignette();
   }
 }
