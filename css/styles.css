@@ -775,7 +775,7 @@ body.is-landscape .exit-btn {
     0
     calc(32px + var(--safe-right))
     calc(28px + var(--safe-bottom))
-    calc(32px + var(--safe-left));
+    calc(56px + var(--safe-left));
   pointer-events: none;
   z-index: 4;
   transition: inset 0.28s ease, padding 0.28s ease;
@@ -1079,9 +1079,9 @@ body.is-landscape .controls {
   align-items: flex-end;
   padding:
     0
-    calc(18px + var(--safe-right))
-    calc(12px + var(--safe-bottom))
-    calc(18px + var(--safe-left));
+    calc(32px + var(--safe-right))
+    calc(28px + var(--safe-bottom))
+    calc(56px + var(--safe-left));
 }
 
 body.is-landscape .virtual-pad {
@@ -1156,7 +1156,7 @@ body.is-portrait .controls {
     0
     calc(32px + var(--safe-right))
     calc(28px + var(--safe-bottom))
-    calc(32px + var(--safe-left));
+    calc(56px + var(--safe-left));
 }
 
 body.is-portrait .virtual-pad {

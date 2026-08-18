@@ -1292,12 +1292,9 @@ export class Renderer {
     const world = level.world;
     const z = zoom || 1;
     const slide = this.slideMetrics();
-    if (z !== 1) {
-      this.ctx.save();
-      this.ctx.translate(slide.cx, slide.cy);
-      this.ctx.scale(z, z);
-      this.ctx.translate(-slide.cx, -slide.cy);
-    }
+    const ctx = this.ctx;
+    ctx.fillStyle = "#031016";
+    ctx.fillRect(0, 0, this.w, this.h);
 
     // 背景轻微逆向相对运动（不宜晃动过猛）
     this.counterFlow.x -= p.vx * 0.012;
@@ -1312,6 +1309,16 @@ export class Renderer {
     }
 
     const flow = this.counterFlow;
+
+    ctx.save();
+    if (z !== 1) {
+      ctx.translate(slide.cx, slide.cy);
+      ctx.scale(z, z);
+      ctx.translate(-slide.cx, -slide.cy);
+    }
+    ctx.beginPath();
+    ctx.arc(slide.cx, slide.cy, slide.r / Math.max(0.01, z), 0, Math.PI * 2);
+    ctx.clip();
 
     this.drawLayeredBackground(level);
     this.drawMotionParallax(level, camera, z);
@@ -1336,7 +1343,7 @@ export class Renderer {
         transitionAccent || level.layer?.accent || "#3ecfb0"
       );
     }
-    if (z !== 1) this.ctx.restore();
+    ctx.restore();
     this.drawSlideVignette();
   }
 }

@@ -16,6 +16,7 @@ import {
   wrapEntity,
   wrappedOffset,
   sweepCircularIntake,
+  clamp,
 } from "./creature.js";
 import {
   createLevel,
@@ -146,6 +147,7 @@ export class Game {
     this.camera.x += (targetX - this.camera.x) * k;
     this.camera.y += (targetY - this.camera.y) * k;
     this._clampCamera(this.level?.world);
+    this._keepPlayerInView();
   }
 
   _clampCamera(world) {
@@ -162,6 +164,40 @@ export class Game {
     if (top < 0) this.camera.y -= top;
     if (right > world.width) this.camera.x -= right - world.width;
     if (bottom > world.height) this.camera.y -= bottom - world.height;
+  }
+
+  /** 玩家钳在镜圈 ∩ 屏内 ∩ 控件上方，不进黑边和底栏 */
+  _keepPlayerInView() {
+    const player = this.level?.player;
+    const world = this.level?.world;
+    if (!player) return;
+    const z = this.renderer.viewZoom || 1;
+    const slide = this.renderer.slideMetrics();
+    const { cx, cy, r, thumbZone } = slide;
+    const w = this.renderer.w;
+    const h = this.renderer.h;
+    const pr = Math.max(4, (player.radius || 8) * z);
+    const sx = cx + (player.x - this.camera.x - cx) * z;
+    const sy = cy + (player.y - this.camera.y - cy) * z;
+    let nsx = clamp(sx, pr + 4, w - pr - 4);
+    let nsy = clamp(sy, pr + 4, h - Math.max(96, thumbZone || 0) - pr);
+    const maxR = Math.max(8, r - pr - 2);
+    const dx = nsx - cx;
+    const dy = nsy - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > maxR) {
+      nsx = cx + (dx / dist) * maxR;
+      nsy = cy + (dy / dist) * maxR;
+      nsy = Math.min(nsy, h - Math.max(96, thumbZone || 0) - pr);
+    }
+    if (Math.abs(nsx - sx) < 0.15 && Math.abs(nsy - sy) < 0.15) return;
+    if (nsx < sx && (player.vx || 0) < 0) player.vx = 0;
+    if (nsx > sx && (player.vx || 0) > 0) player.vx = 0;
+    if (nsy < sy && (player.vy || 0) < 0) player.vy = 0;
+    if (nsy > sy && (player.vy || 0) > 0) player.vy = 0;
+    player.x = this.camera.x + cx + (nsx - cx) / z;
+    player.y = this.camera.y + cy + (nsy - cy) / z;
+    if (world) wrapEntity(player, world);
   }
 
   _canEvolve() {
