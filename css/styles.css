@@ -184,6 +184,24 @@ body:-webkit-full-screen {
   justify-content: center;
 }
 
+.three-link {
+  display: block;
+  margin-top: 0.9rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.three-link:hover {
+  color: var(--accent);
+}
+
+.three-link:active {
+  color: var(--accent);
+}
+
 .icon-play {
   width: 0;
   height: 0;
