@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+  />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#041820" />
+  <title>菌流 · MICROFLOW (Three.js)</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body class="is-landscape">
+  <div id="app">
+    <canvas id="game" aria-label="MICROFLOW"></canvas>
+
+    <section id="title-screen" class="screen">
+      <div class="title-atmosphere" aria-hidden="true"></div>
+      <button id="btn-settings" class="settings-gear" type="button" aria-label="设置" aria-expanded="false">
+        <span class="icon-gear" aria-hidden="true"></span>
+      </button>
+      <div class="title-content">
+        <p class="brand">MICROFLOW</p>
+        <h1 class="brand-cn">菌流</h1>
+        <button id="btn-start" class="cta icon-cta" type="button" aria-label="开始">
+          <span class="icon-play" aria-hidden="true"></span>
+        </button>
+        <a class="three-link" href="../index.html">原版 Canvas</a>
+      </div>
+      <div id="settings-panel" class="settings-panel hidden" role="dialog" aria-label="音频设置">
+        <div class="settings-sheet">
+          <div class="settings-row">
+            <label class="settings-label" for="toggle-music">音乐</label>
+            <button id="toggle-music" class="toggle" type="button" aria-pressed="true"></button>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="vol-music">音量</label>
+            <input id="vol-music" class="vol-slider" type="range" min="0" max="100" value="45" />
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="toggle-sfx">音效</label>
+            <button id="toggle-sfx" class="toggle" type="button" aria-pressed="true"></button>
+          </div>
+          <div class="settings-row">
+            <label class="settings-label" for="vol-sfx">音量</label>
+            <input id="vol-sfx" class="vol-slider" type="range" min="0" max="100" value="55" />
+          </div>
+          <button id="btn-settings-close" class="cta icon-cta ghost settings-close" type="button" aria-label="关闭">
+            <span class="icon-close" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="hud" class="hud hidden" aria-live="polite">
+      <span id="hud-floor" class="hud-floor" aria-label="层数">1</span>
+      <div id="meter-protein" class="meter hud-meter-protein">
+        <span class="meter-icon protein-icon" aria-hidden="true"></span>
+        <div class="meter-track">
+          <div id="protein-fill" class="meter-fill protein-fill"></div>
+        </div>
+      </div>
+      <div id="meter-dna" class="meter hud-meter-dna">
+        <span id="dna-icon" class="meter-icon evolve-icon" aria-hidden="true"></span>
+        <div class="meter-track">
+          <div id="dna-fill" class="meter-fill evolve-fill"></div>
+        </div>
+      </div>
+      <div id="hud-nuclei" class="nuclei-row" aria-label="细胞核"></div>
+      <button id="btn-exit" class="exit-btn" type="button" aria-label="退出">
+        <span class="icon-close" aria-hidden="true"></span>
+      </button>
+    </section>
+
+    <div id="controls" class="controls hidden">
+      <div id="virtual-pad" class="virtual-pad" aria-label="移动">
+        <div class="pad-cross" aria-hidden="true"></div>
+        <div id="virtual-knob" class="virtual-knob"></div>
+      </div>
+      <button id="btn-boost" class="boost-skill" type="button" aria-label="加速">
+        <svg class="boost-ring" viewBox="0 0 72 72" aria-hidden="true">
+          <circle class="boost-ring-track" cx="36" cy="36" r="28" />
+          <circle id="boost-ring-fill" class="boost-ring-fill" cx="36" cy="36" r="28" />
+        </svg>
+      </button>
+    </div>
+
+    <section id="overlay" class="screen overlay hidden">
+      <div class="overlay-card">
+        <div id="overlay-visual" class="overlay-visual end" aria-hidden="true"></div>
+        <ul id="scoreboard" class="scoreboard" aria-label="本局计分">
+          <li>
+            <span class="score-label">失败层数</span>
+            <span id="score-layer" class="score-value">1</span>
+          </li>
+          <li>
+            <span class="score-label">吃掉生物</span>
+            <span id="score-creatures" class="score-value">0</span>
+          </li>
+          <li>
+            <span class="score-label">吃掉蛋白</span>
+            <span id="score-proteins" class="score-value">0</span>
+          </li>
+        </ul>
+        <div class="overlay-actions">
+          <button id="btn-retry" class="cta icon-cta" type="button" aria-label="重试">
+            <span class="icon-retry" aria-hidden="true"></span>
+          </button>
+          <button id="btn-home" class="cta icon-cta ghost" type="button" aria-label="返回">
+            <span class="icon-home" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
