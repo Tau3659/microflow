@@ -319,26 +319,14 @@ function initViewer() {
     attribute vec2 a_texCoord;
     
     uniform vec2 u_resolution;
-    uniform float u_parallaxX;
-    uniform float u_parallaxY;
     
     varying vec2 v_texCoord;
-    varying float v_depth;
     
     void main() {
-      vec2 position = a_position;
-      
-      // 应用视差效果
-      float depthFactor = a_texCoord.y; // 简化的深度：上方更远
-      position.x += u_parallaxX * depthFactor * 0.15;
-      position.y += u_parallaxY * depthFactor * 0.1;
-      
       // 转换到裁剪空间
-      vec2 clipSpace = ((position / u_resolution) * 2.0 - 1.0) * vec2(1, -1);
-      
+      vec2 clipSpace = ((a_position / u_resolution) * 2.0 - 1.0) * vec2(1, -1);
       gl_Position = vec4(clipSpace, 0, 1);
       v_texCoord = a_texCoord;
-      v_depth = depthFactor;
     }
   `;
   
@@ -346,27 +334,55 @@ function initViewer() {
     precision mediump float;
     
     uniform sampler2D u_image;
+    uniform vec2 u_resolution;
+    uniform vec2 u_imageSize;
     uniform float u_parallaxX;
     uniform float u_parallaxY;
     
     varying vec2 v_texCoord;
-    varying float v_depth;
     
     void main() {
-      // 基于深度的纹理偏移，创建视差效果
-      vec2 offset = vec2(
-        u_parallaxX * v_depth * 0.02,
-        u_parallaxY * v_depth * 0.015
+      // 计算保持比例的纹理坐标
+      float canvasAspect = u_resolution.x / u_resolution.y;
+      float imageAspect = u_imageSize.x / u_imageSize.y;
+      
+      vec2 uv = v_texCoord;
+      
+      // 居中并保持比例 (contain 模式)
+      if (imageAspect > canvasAspect) {
+        // 图片更宽，上下留黑边
+        float scale = canvasAspect / imageAspect;
+        uv.y = (uv.y - 0.5) / scale + 0.5;
+      } else {
+        // 图片更高，左右留黑边
+        float scale = imageAspect / canvasAspect;
+        uv.x = (uv.x - 0.5) / scale + 0.5;
+      }
+      
+      // 基于深度的视差效果
+      // 假设图片下方是近处，上方是远处
+      float depth = 1.0 - uv.y; // 下方深度小（近），上方深度大（远）
+      
+      // 近处物体移动更多，远处物体移动更少（视差原理）
+      float parallaxStrength = 0.03;
+      vec2 parallaxOffset = vec2(
+        u_parallaxX * depth * parallaxStrength,
+        u_parallaxY * depth * parallaxStrength * 0.5
       );
       
-      vec2 texCoord = v_texCoord + offset;
-      texCoord = clamp(texCoord, 0.0, 1.0);
+      uv += parallaxOffset;
       
-      vec4 color = texture2D(u_image, texCoord);
+      // 检查是否在有效范围内
+      if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+        gl_FragColor = vec4(0.04, 0.04, 0.06, 1.0); // 背景色
+        return;
+      }
       
-      // 添加轻微的深度雾效果
-      float fogFactor = v_depth * 0.1;
-      color.rgb = mix(color.rgb, vec3(0.1, 0.1, 0.15), fogFactor);
+      vec4 color = texture2D(u_image, uv);
+      
+      // 轻微的景深效果：远处稍微模糊/暗淡
+      float depthFade = smoothstep(0.0, 1.0, depth) * 0.08;
+      color.rgb = mix(color.rgb, color.rgb * 0.9, depthFade);
       
       gl_FragColor = color;
     }
@@ -444,60 +460,38 @@ function createProgram(gl, vertexShader, fragmentShader) {
 
 function setupGeometry(imgWidth, imgHeight) {
   const canvas = elements.viewerCanvas;
-  const canvasAspect = canvas.width / canvas.height;
-  const imgAspect = imgWidth / imgHeight;
   
-  let drawWidth, drawHeight;
-  if (imgAspect > canvasAspect) {
-    drawWidth = canvas.width;
-    drawHeight = canvas.width / imgAspect;
-  } else {
-    drawHeight = canvas.height;
-    drawWidth = canvas.height * imgAspect;
-  }
+  // 保存图像尺寸供渲染使用
+  state.imgWidth = imgWidth;
+  state.imgHeight = imgHeight;
   
-  const x1 = (canvas.width - drawWidth) / 2;
-  const y1 = (canvas.height - drawHeight) / 2;
-  const x2 = x1 + drawWidth;
-  const y2 = y1 + drawHeight;
+  // 简单的全屏四边形，不做网格细分
+  // 视差效果在片段着色器中通过纹理偏移实现
+  const positions = new Float32Array([
+    0, 0,
+    canvas.width, 0,
+    0, canvas.height,
+    0, canvas.height,
+    canvas.width, 0,
+    canvas.width, canvas.height
+  ]);
   
-  // 创建网格以支持视差变形
-  const gridSize = 20;
-  const positions = [];
-  const texCoords = [];
-  
-  for (let gy = 0; gy < gridSize; gy++) {
-    for (let gx = 0; gx < gridSize; gx++) {
-      const u0 = gx / gridSize;
-      const v0 = gy / gridSize;
-      const u1 = (gx + 1) / gridSize;
-      const v1 = (gy + 1) / gridSize;
-      
-      const px0 = x1 + u0 * drawWidth;
-      const py0 = y1 + v0 * drawHeight;
-      const px1 = x1 + u1 * drawWidth;
-      const py1 = y1 + v1 * drawHeight;
-      
-      // 两个三角形组成一个网格单元
-      positions.push(
-        px0, py0, px1, py0, px0, py1,
-        px0, py1, px1, py0, px1, py1
-      );
-      
-      texCoords.push(
-        u0, v0, u1, v0, u0, v1,
-        u0, v1, u1, v0, u1, v1
-      );
-    }
-  }
+  const texCoords = new Float32Array([
+    0, 0,
+    1, 0,
+    0, 1,
+    0, 1,
+    1, 0,
+    1, 1
+  ]);
   
   gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
   
   gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texCoords), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
   
-  state.vertexCount = positions.length / 2;
+  state.vertexCount = 6;
 }
 
 function render() {
@@ -526,19 +520,26 @@ function render() {
   const resolutionLocation = gl.getUniformLocation(program, 'u_resolution');
   gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
   
+  // 传入图像尺寸
+  const imageSizeLocation = gl.getUniformLocation(program, 'u_imageSize');
+  gl.uniform2f(imageSizeLocation, state.imgWidth || canvas.width, state.imgHeight || canvas.height);
+  
   // 计算视差值
   let parallaxX, parallaxY;
   
   if (state.gyroEnabled && state.gyroPermissionGranted) {
-    parallaxX = state.orientation.gamma / 45;  // gamma: -90 ~ 90
-    parallaxY = (state.orientation.beta - 45) / 45;  // beta: -180 ~ 180，默认45度拿手机
+    // 陀螺仪模式：gamma 是左右倾斜，beta 是前后倾斜
+    parallaxX = state.orientation.gamma / 30;  // gamma: -90 ~ 90，除以30增强效果
+    parallaxY = (state.orientation.beta - 60) / 30;  // beta 默认60度（正常握持角度）
   } else {
-    parallaxX = state.mouseControl.rotY / 30;
-    parallaxY = state.mouseControl.rotX / 30;
+    // 鼠标/触摸模式
+    parallaxX = state.mouseControl.rotY / 20;
+    parallaxY = state.mouseControl.rotX / 20;
   }
   
-  parallaxX = Math.max(-1, Math.min(1, parallaxX));
-  parallaxY = Math.max(-1, Math.min(1, parallaxY));
+  // 限制范围并平滑
+  parallaxX = Math.max(-1.5, Math.min(1.5, parallaxX));
+  parallaxY = Math.max(-1.5, Math.min(1.5, parallaxY));
   
   const parallaxXLocation = gl.getUniformLocation(program, 'u_parallaxX');
   const parallaxYLocation = gl.getUniformLocation(program, 'u_parallaxY');
