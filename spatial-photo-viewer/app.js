@@ -166,39 +166,52 @@ elements.generateBtn.addEventListener('click', () => {
 });
 
 // ============ 示例演示 ============
+// 使用支持 CORS 的图片源
 const demoImages = {
-  landscape: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80',
-  room: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&q=80',
-  portrait: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80'
+  landscape: 'https://picsum.photos/800/600?random=1',
+  room: 'https://picsum.photos/800/600?random=2',
+  portrait: 'https://picsum.photos/600/800?random=3'
 };
 
 elements.demoButtons.forEach(btn => {
   btn.addEventListener('click', async () => {
     const demoType = btn.dataset.demo;
     const url = demoImages[demoType];
+    const originalText = btn.textContent;
     
     try {
       btn.disabled = true;
       btn.textContent = '加载中...';
       
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const reader = new FileReader();
+      // 使用 Image 对象直接加载，避免 fetch 跨域问题
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
       
-      reader.onload = (e) => {
-        state.imageData = e.target.result;
-        elements.previewImage.src = state.imageData;
-        elements.previewContainer.classList.remove('hidden');
-        elements.dropZone.style.display = 'none';
-        btn.disabled = false;
-        btn.textContent = btn.dataset.demo === 'landscape' ? '🏞️ 风景' : 
-                         btn.dataset.demo === 'room' ? '🏠 室内' : '👤 人像';
-      };
-      reader.readAsDataURL(blob);
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = url;
+      });
+      
+      // 转换为 data URL
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      
+      state.imageData = canvas.toDataURL('image/jpeg', 0.9);
+      elements.previewImage.src = state.imageData;
+      elements.previewContainer.classList.remove('hidden');
+      elements.dropZone.style.display = 'none';
+      
+      btn.disabled = false;
+      btn.textContent = originalText;
     } catch (error) {
       console.error('加载示例失败:', error);
       btn.disabled = false;
       btn.textContent = '加载失败';
+      setTimeout(() => { btn.textContent = originalText; }, 2000);
     }
   });
 });
@@ -208,23 +221,48 @@ let gl, program, positionBuffer, texCoordBuffer, texture;
 
 function initViewer() {
   console.log('initViewer 被调用');
-  console.log('state.imageData 类型:', typeof state.imageData);
-  console.log('state.imageData 长度:', state.imageData ? state.imageData.length : 0);
+  
+  if (!state.imageData) {
+    console.error('没有图像数据');
+    alert('图像数据丢失，请重新上传');
+    showScreen('upload');
+    return;
+  }
   
   const canvas = elements.viewerCanvas;
   const container = canvas.parentElement;
   
-  canvas.width = container.clientWidth * window.devicePixelRatio;
-  canvas.height = container.clientHeight * window.devicePixelRatio;
+  // 限制最大分辨率以提高移动端性能
+  const maxSize = 1024;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const width = Math.min(container.clientWidth * dpr, maxSize);
+  const height = Math.min(container.clientHeight * dpr, maxSize);
+  
+  canvas.width = width;
+  canvas.height = height;
   canvas.style.width = container.clientWidth + 'px';
   canvas.style.height = container.clientHeight + 'px';
   
-  gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  // 尝试获取 WebGL 上下文，带有移动端友好的选项
+  const contextOptions = {
+    alpha: false,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    preserveDrawingBuffer: true,
+    powerPreference: 'low-power'
+  };
+  
+  gl = canvas.getContext('webgl', contextOptions) || 
+       canvas.getContext('experimental-webgl', contextOptions);
   
   if (!gl) {
-    alert('WebGL 不可用');
+    alert('您的浏览器不支持 WebGL，请使用现代浏览器');
+    showScreen('upload');
     return;
   }
+  
+  console.log('WebGL 初始化成功');
   
   const vertexShaderSource = `
     precision mediump float;
@@ -462,7 +500,7 @@ function render() {
   // 绑定纹理
   const imageLocation = gl.getUniformLocation(program, 'u_image');
   gl.uniform1i(imageLocation, 0);
-  gl.activeTexture(gl.TEXTURE_0);
+  gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, texture);
   
   // 绘制
@@ -535,14 +573,25 @@ function setupMouseControl(canvas) {
 
 // ============ 陀螺仪控制 ============
 function checkGyroSupport() {
+  // 检测是否为移动设备
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  if (!isMobile) {
+    elements.gyroHint.textContent = '🖱️ 拖动鼠标查看不同角度';
+    return;
+  }
+  
+  // 检测是否支持陀螺仪
   if ('DeviceOrientationEvent' in window) {
+    // iOS 13+ 需要请求权限
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
       elements.gyroHint.textContent = '📱 点击「陀螺仪」按钮启用';
     } else {
+      // Android 或旧版 iOS，直接启用
       enableGyro();
     }
   } else {
-    elements.gyroHint.textContent = '🖱️ 拖动查看不同角度';
+    elements.gyroHint.textContent = '👆 滑动屏幕查看不同角度';
   }
 }
 
@@ -638,4 +687,18 @@ window.addEventListener('resize', () => {
 });
 
 // ============ 初始化 ============
+// 全局错误处理
+window.onerror = function(msg, url, line, col, error) {
+  console.error('全局错误:', msg, 'at', url, ':', line);
+  return false;
+};
+
+// 检测 HTTPS（陀螺仪需要安全上下文）
+if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+  console.warn('陀螺仪功能需要 HTTPS 环境');
+}
+
+// 显示上传界面
 showScreen('upload');
+
+console.log('空间照片查看器已初始化');
