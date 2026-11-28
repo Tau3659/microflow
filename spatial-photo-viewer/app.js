@@ -207,6 +207,10 @@ elements.demoButtons.forEach(btn => {
 let gl, program, positionBuffer, texCoordBuffer, texture;
 
 function initViewer() {
+  console.log('initViewer 被调用');
+  console.log('state.imageData 类型:', typeof state.imageData);
+  console.log('state.imageData 长度:', state.imageData ? state.imageData.length : 0);
+  
   const canvas = elements.viewerCanvas;
   const container = canvas.parentElement;
   
@@ -223,12 +227,12 @@ function initViewer() {
   }
   
   const vertexShaderSource = `
+    precision mediump float;
+    
     attribute vec2 a_position;
     attribute vec2 a_texCoord;
     
     uniform vec2 u_resolution;
-    uniform vec2 u_offset;
-    uniform float u_scale;
     uniform float u_parallaxX;
     uniform float u_parallaxY;
     
@@ -305,12 +309,21 @@ function initViewer() {
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = () => {
+    console.log('图像加载成功:', img.width, 'x', img.height);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
     
     setupGeometry(img.width, img.height);
     render();
   };
+  img.onerror = (e) => {
+    console.error('图像加载失败:', e);
+  };
+  
+  // 确保使用 data URL 时不需要 crossOrigin
+  if (state.imageData.startsWith('data:')) {
+    img.crossOrigin = null;
+  }
   img.src = state.imageData;
   
   // 设置鼠标/触摸控制
