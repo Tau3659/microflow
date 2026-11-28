@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>空间照片生成器 - ML-SHARP 3D</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .processing-time {
+      font-size: 24px;
+      font-weight: bold;
+      color: var(--primary);
+      margin: 16px 0;
+    }
+    .real-3d-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
+      color: white;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- 上传界面 -->
+    <div id="upload-screen" class="screen active">
+      <div class="upload-container">
+        <h1>🌌 空间照片生成器 <span class="real-3d-badge">真3D</span></h1>
+        <p class="subtitle">使用 Apple ML-SHARP 生成真正的 3D 高斯点云</p>
+        
+        <div id="drop-zone" class="drop-zone">
+          <div class="drop-icon">📷</div>
+          <p>拖放照片到这里</p>
+          <p class="or">或</p>
+          <label class="upload-btn">
+            选择照片
+            <input type="file" id="file-input" accept="image/*,.heic,.heif" hidden>
+          </label>
+        </div>
+        
+        <div id="preview-container" class="preview-container hidden">
+          <img id="preview-image" alt="预览">
+          <button id="generate-btn" class="generate-btn">
+            <span class="btn-text">🚀 生成真3D空间照片</span>
+            <span class="btn-loading hidden">处理中...</span>
+          </button>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+            ⏱️ CPU 推理约需 40-60 秒
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 处理界面 -->
+    <div id="processing-screen" class="screen">
+      <div class="processing-container">
+        <div class="spinner"></div>
+        <h2>ML-SHARP 正在处理...</h2>
+        <div class="processing-time" id="processing-time">0 秒</div>
+        <p id="processing-status">上传图片中</p>
+        <div class="progress-bar">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <p class="processing-note">
+          🧠 Apple ML-SHARP 正在分析场景并生成 120 万个 3D 高斯点<br>
+          这是真正的 3D 重建，不是模拟效果
+        </p>
+      </div>
+    </div>
+
+    <!-- 查看器界面 -->
+    <div id="viewer-screen" class="screen">
+      <div id="viewer-container" class="viewer-container">
+        <canvas id="viewer-canvas"></canvas>
+      </div>
+      
+      <div id="controls-overlay" class="controls-overlay">
+        <div class="control-hint" id="gyro-hint">
+          📱 倾斜手机查看真3D效果
+        </div>
+      </div>
+      
+      <div class="viewer-toolbar">
+        <button id="back-btn" class="toolbar-btn">← 返回</button>
+        <div class="toolbar-info">
+          <span id="angle-display">加载中...</span>
+        </div>
+        <button id="gyro-toggle" class="toolbar-btn">🎯 陀螺仪</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 加载 gsplat.js -->
+  <script type="importmap">
+  {
+    "imports": {
+      "gsplat": "https://unpkg.com/gsplat@1.0.3/dist/gsplat.mjs"
+    }
+  }
+  </script>
+  
+  <script type="module">
+    import * as SPLAT from 'gsplat';
+    
+    // 状态
+    const state = {
+      currentScreen: 'upload',
+      file: null,
+      plyUrl: null,
+      scene: null,
+      camera: null,
+      renderer: null,
+      controls: null,
+      gyroEnabled: false
+    };
+    
+    // DOM 元素
+    const $ = id => document.getElementById(id);
+    const uploadScreen = $('upload-screen');
+    const processingScreen = $('processing-screen');
+    const viewerScreen = $('viewer-screen');
+    const dropZone = $('drop-zone');
+    const fileInput = $('file-input');
+    const previewContainer = $('preview-container');
+    const previewImage = $('preview-image');
+    const generateBtn = $('generate-btn');
+    const processingStatus = $('processing-status');
+    const processingTime = $('processing-time');
+    const progressFill = $('progress-fill');
+    const viewerCanvas = $('viewer-canvas');
+    const backBtn = $('back-btn');
+    const gyroToggle = $('gyro-toggle');
+    const angleDisplay = $('angle-display');
+    
+    // 显示屏幕
+    function showScreen(name) {
+      [uploadScreen, processingScreen, viewerScreen].forEach(s => s.classList.remove('active'));
+      $(`${name}-screen`).classList.add('active');
+      state.currentScreen = name;
+    }
+    
+    // 文件处理
+    function handleFile(file) {
+      if (!file) return;
+      state.file = file;
+      
+      const reader = new FileReader();
+      reader.onload = e => {
+        previewImage.src = e.target.result;
+        previewContainer.classList.remove('hidden');
+        dropZone.style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+    }
+    
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+    
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      handleFile(e.dataTransfer.files[0]);
+    });
+    
+    // 生成按钮
+    generateBtn.addEventListener('click', async () => {
+      if (!state.file) return;
+      
+      showScreen('processing');
+      
+      // 计时器
+      let seconds = 0;
+      const timer = setInterval(() => {
+        seconds++;
+        processingTime.textContent = `${seconds} 秒`;
+      }, 1000);
+      
+      try {
+        // 上传文件
+        processingStatus.textContent = '上传图片中...';
+        progressFill.style.width = '10%';
+        
+        const formData = new FormData();
+        formData.append('image', state.file);
+        
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          body: formData
+        });
+        
+        processingStatus.textContent = 'ML-SHARP 处理中...';
+        progressFill.style.width = '30%';
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error || '处理失败');
+        }
+        
+        processingStatus.textContent = '加载 3D 模型...';
+        progressFill.style.width = '80%';
+        
+        state.plyUrl = result.ply_url;
+        
+        clearInterval(timer);
+        progressFill.style.width = '100%';
+        
+        // 初始化 3D 查看器
+        await init3DViewer();
+        
+        showScreen('viewer');
+        
+      } catch (error) {
+        clearInterval(timer);
+        console.error('错误:', error);
+        alert('处理失败: ' + error.message);
+        showScreen('upload');
+      }
+    });
+    
+    // 初始化 3D 查看器
+    async function init3DViewer() {
+      const container = viewerCanvas.parentElement;
+      
+      // 创建 gsplat 场景
+      state.scene = new SPLAT.Scene();
+      state.camera = new SPLAT.Camera();
+      state.renderer = new SPLAT.WebGLRenderer(viewerCanvas);
+      state.controls = new SPLAT.OrbitControls(state.camera, viewerCanvas);
+      
+      // 加载 PLY 文件
+      angleDisplay.textContent = '加载中...';
+      
+      try {
+        await SPLAT.PLYLoader.LoadAsync(state.plyUrl, state.scene, (progress) => {
+          angleDisplay.textContent = `加载: ${Math.round(progress * 100)}%`;
+        });
+        
+        angleDisplay.textContent = '拖动旋转';
+        
+        // 渲染循环
+        function render() {
+          state.controls.update();
+          state.renderer.render(state.scene, state.camera);
+          requestAnimationFrame(render);
+        }
+        render();
+        
+      } catch (error) {
+        console.error('加载 PLY 失败:', error);
+        angleDisplay.textContent = '加载失败';
+      }
+    }
+    
+    // 返回按钮
+    backBtn.addEventListener('click', () => {
+      state.file = null;
+      state.plyUrl = null;
+      previewContainer.classList.add('hidden');
+      dropZone.style.display = '';
+      progressFill.style.width = '0%';
+      processingTime.textContent = '0 秒';
+      showScreen('upload');
+    });
+    
+    // 陀螺仪
+    gyroToggle.addEventListener('click', async () => {
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const permission = await DeviceOrientationEvent.requestPermission();
+        if (permission !== 'granted') return;
+      }
+      
+      state.gyroEnabled = !state.gyroEnabled;
+      gyroToggle.classList.toggle('active', state.gyroEnabled);
+      
+      if (state.gyroEnabled && state.controls) {
+        // 禁用手动控制，启用陀螺仪
+        window.addEventListener('deviceorientation', handleGyro);
+      } else {
+        window.removeEventListener('deviceorientation', handleGyro);
+      }
+    });
+    
+    function handleGyro(e) {
+      if (!state.camera) return;
+      // 根据陀螺仪旋转相机
+      const beta = e.beta || 0;
+      const gamma = e.gamma || 0;
+      state.camera.rotation.x = beta * Math.PI / 180 * 0.5;
+      state.camera.rotation.y = gamma * Math.PI / 180 * 0.5;
+    }
+    
+    console.log('🌌 空间照片生成器 (ML-SHARP 真3D版) 已就绪');
+  </script>
+</body>
+</html>
