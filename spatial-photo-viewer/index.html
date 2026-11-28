@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>空间照片查看器 - 3D Gaussian Splatting</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 上传界面 -->
+    <div id="upload-screen" class="screen active">
+      <div class="upload-container">
+        <h1>🌌 空间照片生成器</h1>
+        <p class="subtitle">上传一张照片，生成可交互的伪3D空间照片</p>
+        
+        <div id="drop-zone" class="drop-zone">
+          <div class="drop-icon">📷</div>
+          <p>拖放照片到这里</p>
+          <p class="or">或</p>
+          <label class="upload-btn">
+            选择照片
+            <input type="file" id="file-input" accept="image/*" hidden>
+          </label>
+        </div>
+        
+        <div id="preview-container" class="preview-container hidden">
+          <img id="preview-image" alt="预览">
+          <button id="generate-btn" class="generate-btn">
+            <span class="btn-text">生成 3D 空间照片</span>
+            <span class="btn-loading hidden">处理中...</span>
+          </button>
+        </div>
+        
+        <div class="demo-section">
+          <p>或者试试示例：</p>
+          <div class="demo-buttons">
+            <button class="demo-btn" data-demo="landscape">🏞️ 风景</button>
+            <button class="demo-btn" data-demo="room">🏠 室内</button>
+            <button class="demo-btn" data-demo="portrait">👤 人像</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 处理界面 -->
+    <div id="processing-screen" class="screen">
+      <div class="processing-container">
+        <div class="spinner"></div>
+        <h2>正在生成空间照片...</h2>
+        <p id="processing-status">准备中</p>
+        <div class="progress-bar">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <p class="processing-note">
+          💡 提示：完整的 ML-SHARP 处理需要后端 GPU 服务器<br>
+          当前使用深度估计模拟演示效果
+        </p>
+      </div>
+    </div>
+
+    <!-- 查看器界面 -->
+    <div id="viewer-screen" class="screen">
+      <div id="viewer-container" class="viewer-container">
+        <canvas id="viewer-canvas"></canvas>
+      </div>
+      
+      <div id="controls-overlay" class="controls-overlay">
+        <div class="control-hint" id="gyro-hint">
+          📱 倾斜手机查看不同角度
+        </div>
+        <div class="control-hint desktop-hint">
+          🖱️ 拖动鼠标旋转视角
+        </div>
+      </div>
+      
+      <div class="viewer-toolbar">
+        <button id="back-btn" class="toolbar-btn">
+          ← 返回
+        </button>
+        <div class="toolbar-info">
+          <span id="angle-display">β: 0° γ: 0°</span>
+        </div>
+        <button id="gyro-toggle" class="toolbar-btn">
+          🎯 陀螺仪
+        </button>
+      </div>
+      
+      <div id="gyro-permission" class="gyro-permission hidden">
+        <div class="permission-card">
+          <h3>需要陀螺仪权限</h3>
+          <p>允许访问设备方向传感器以获得最佳体验</p>
+          <button id="grant-permission-btn" class="permission-btn">
+            授权访问
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
