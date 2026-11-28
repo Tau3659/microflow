@@ -49,18 +49,47 @@ function showScreen(screenName) {
 
 // ============ 文件处理 ============
 function handleFile(file) {
-  if (!file || !file.type.startsWith('image/')) {
+  console.log('handleFile 被调用', file);
+  
+  if (!file) {
+    console.error('没有选择文件');
+    alert('请选择文件');
+    return;
+  }
+  
+  // 放宽文件类型检测，支持 HEIC 等格式
+  const isImage = file.type.startsWith('image/') || 
+                  file.name.match(/\.(jpg|jpeg|png|gif|webp|heic|heif|bmp)$/i);
+  
+  if (!isImage) {
+    console.error('文件类型不支持:', file.type, file.name);
     alert('请选择图片文件');
     return;
   }
+  
+  console.log('开始读取文件:', file.name, file.type, file.size);
 
   const reader = new FileReader();
+  
   reader.onload = (e) => {
+    console.log('文件读取成功，大小:', e.target.result.length);
     state.imageData = e.target.result;
     elements.previewImage.src = state.imageData;
     elements.previewContainer.classList.remove('hidden');
     elements.dropZone.style.display = 'none';
   };
+  
+  reader.onerror = (e) => {
+    console.error('文件读取失败:', e);
+    alert('文件读取失败，请重试');
+  };
+  
+  reader.onprogress = (e) => {
+    if (e.lengthComputable) {
+      console.log('读取进度:', Math.round(e.loaded / e.total * 100) + '%');
+    }
+  };
+  
   reader.readAsDataURL(file);
 }
 
@@ -81,12 +110,31 @@ elements.dropZone.addEventListener('drop', (e) => {
   handleFile(file);
 });
 
-elements.dropZone.addEventListener('click', () => {
+elements.dropZone.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  console.log('点击上传区域');
   elements.fileInput.click();
 });
 
+// 点击上传按钮
+const uploadBtn = document.querySelector('.upload-btn');
+if (uploadBtn) {
+  uploadBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    console.log('点击上传按钮');
+  });
+}
+
 elements.fileInput.addEventListener('change', (e) => {
-  handleFile(e.target.files[0]);
+  console.log('文件选择事件触发', e.target.files);
+  if (e.target.files && e.target.files.length > 0) {
+    handleFile(e.target.files[0]);
+  } else {
+    console.log('没有选择文件');
+  }
+  // 重置 input 以便可以重复选择同一文件
+  e.target.value = '';
 });
 
 // ============ 深度估计（模拟 ML-SHARP 效果）============
